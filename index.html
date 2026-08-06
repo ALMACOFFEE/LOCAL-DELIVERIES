@@ -1,0 +1,1580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alma Coffee — Delivery Route Analyzer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{
+  --navy:#1B2B4B;--navy-dk:#14213a;--gold:#C9A84C;--gold-lt:#F5EDDA;
+  --red:#C0392B;--red-lt:#FFEBEE;--green:#2E7D32;--green-lt:#E8F5E9;
+  --orange:#E65100;--orange-lt:#FFF3E0;--blue:#1565C0;--purple:#6A1B9A;
+  --gray0:#FAFAF8;--gray1:#F2F1EE;--gray2:#E5E3DE;--gray3:#CCCAC4;
+  --gray4:#888680;--gray5:#555350;--text:#1B2B4B;--border:#E5E3DE;--radius:7px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--gray0);color:var(--text);font-size:13px;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+.hdr{background:var(--navy);color:#fff;padding:0 16px;height:44px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.hdr h1{font-size:14px;font-weight:600}
+.hdr span{font-size:11px;opacity:.5}
+.badge{background:var(--gold);color:var(--navy);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;text-transform:uppercase;letter-spacing:.05em}
+.tabs{background:var(--navy-dk);display:flex;flex-shrink:0;overflow-x:auto}
+.tab{padding:0 12px;height:36px;font-size:12px;font-weight:500;color:rgba(255,255,255,.45);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s,border-color .15s;display:flex;align-items:center}
+.tab.active{color:#fff;border-bottom-color:var(--gold)}
+.tab:hover:not(.active){color:rgba(255,255,255,.75)}
+.layout{display:flex;flex:1;overflow:hidden}
+#map{flex:1;z-index:1}
+.panel{width:340px;background:#fff;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.panel-scroll{flex:1;overflow-y:auto}
+.sec{padding:12px 14px;border-bottom:1px solid var(--gray1)}
+.sec-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--gray4);margin-bottom:8px}
+.fl{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.fl:last-child{margin-bottom:0}
+.fl label{font-size:10px;font-weight:500;color:var(--gray4)}
+input[type=text],input[type=number],input[type=date],input[type=time],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--gray2);border-radius:var(--radius);font-size:12px;color:var(--text);background:#fafafa;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:var(--navy);background:#fff}
+textarea{resize:vertical;min-height:52px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.btn{padding:7px 12px;border-radius:var(--radius);font-size:12px;font-weight:500;cursor:pointer;border:none;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;font-family:inherit}
+.btn-primary{background:var(--navy);color:#fff;width:100%}
+.btn-primary:hover{background:#2a3f6a}
+.btn-primary:disabled{background:var(--gray3);cursor:not-allowed}
+.btn-gold{background:var(--gold);color:var(--navy);width:100%;font-weight:600}
+.btn-gold:hover{background:#b8952e}
+.btn-sm{padding:4px 9px;font-size:11px;border-radius:5px;border:none;cursor:pointer;font-family:inherit;font-weight:500}
+.btn-edit{background:#EBF3FB;color:var(--blue)}
+.btn-del{background:var(--red-lt);color:var(--red)}
+.btn-del:hover{background:#f7c1c1}
+.btn-link{background:var(--green-lt);color:var(--green)}
+.btn-ghost{background:var(--gray1);color:var(--gray5)}
+.btn-ghost:hover{background:var(--gray2)}
+.btn-success{background:var(--green);color:#fff;width:100%}
+.btn-success:hover{background:#1b5e20}
+.types{display:flex;gap:4px}
+.type-chip{flex:1;padding:5px 4px;border:1px solid var(--gray2);border-radius:5px;font-size:11px;cursor:pointer;background:#fff;color:var(--gray5);text-align:center;transition:all .15s}
+.type-chip.on{border-color:var(--navy);background:var(--navy);color:#fff}
+/* color picker */
+.color-picker{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.color-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .12s}
+.color-swatch:hover{transform:scale(1.2)}
+.color-swatch.selected{border-color:#fff;box-shadow:0 0 0 2px var(--navy)}
+/* metric */
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.metric{background:var(--gray0);border-radius:6px;padding:7px 9px}
+.metric-lbl{font-size:9px;color:var(--gray4);font-weight:500;margin-bottom:1px}
+.metric-val{font-size:15px;font-weight:600;color:var(--text)}
+.metric-sub{font-size:9px;color:var(--gray3);margin-top:1px}
+.bk{background:var(--gray0);border-radius:6px;padding:8px;font-size:11px;margin-bottom:7px}
+.bk-row{display:flex;justify-content:space-between;padding:2px 0;color:var(--gray5)}
+.bk-row.sub{color:var(--gray3);padding-left:10px}
+.bk-row.tot{font-weight:600;color:var(--text);border-top:1px solid var(--gray2);margin-top:4px;padding-top:5px}
+.insight{background:var(--gold-lt);border-left:3px solid var(--gold);padding:7px 9px;font-size:11px;color:var(--gray5);line-height:1.55;border-radius:0 6px 6px 0;margin-bottom:7px}
+.origin-compare{border:1px solid var(--gray2);border-radius:7px;margin-bottom:8px;overflow:hidden}
+.origin-row{display:flex;align-items:center;padding:7px 10px;gap:8px;border-bottom:1px solid var(--gray1)}
+.origin-row:last-child{border-bottom:none}
+.origin-row.winner{background:var(--green-lt)}
+.origin-label{flex:1;font-size:11px;font-weight:500;color:var(--text)}
+.origin-sub{font-size:10px;color:var(--gray4)}
+.origin-cost{font-size:13px;font-weight:600;text-align:right}
+.origin-verdict{font-size:10px;font-weight:600;padding:2px 6px;border-radius:8px}
+.ov-deliver{background:var(--green-lt);color:var(--green)}
+.ov-ship{background:var(--red-lt);color:var(--red)}
+.ov-border{background:var(--orange-lt);color:var(--orange)}
+/* node items */
+.node-item{display:flex;align-items:flex-start;gap:7px;padding:7px 8px;border-radius:6px;background:var(--gray0);border:1px solid var(--gray2);margin-bottom:4px}
+.node-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px;border:1.5px solid rgba(0,0,0,.12)}
+.node-name{font-size:12px;font-weight:500;color:var(--text)}
+.node-addr{font-size:10px;color:var(--gray4);margin-top:1px;line-height:1.3}
+.node-meta{font-size:10px;color:var(--gray3);margin-top:2px}
+.node-actions{display:flex;gap:3px;flex-shrink:0}
+.edit-form{background:#EBF3FB;border-radius:6px;padding:9px;margin-top:4px;display:flex;flex-direction:column;gap:5px}
+/* expandable items */
+.exp-item{border:1px solid var(--gray2);border-radius:8px;margin-bottom:6px;overflow:hidden}
+.exp-hdr{display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--gray0);cursor:pointer}
+.exp-hdr:hover{background:var(--gray1)}
+.exp-body{padding:8px 10px;border-top:1px solid var(--gray2);display:none}
+.exp-body.open{display:block}
+.loc-tag{display:inline-flex;align-items:center;gap:4px;background:var(--gray1);border:1px solid var(--gray2);border-radius:12px;padding:2px 8px;font-size:10px;color:var(--gray5);margin:2px}
+.loc-tag button{border:none;background:none;cursor:pointer;color:var(--red);font-size:12px;line-height:1;padding:0}
+/* route log */
+.route-log-item{border:1px solid var(--gray2);border-radius:8px;margin-bottom:6px;overflow:hidden}
+.route-log-hdr{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gray0);cursor:pointer;user-select:none}
+.route-log-hdr:hover{background:var(--gray1)}
+.route-body{display:none;border-top:1px solid var(--gray2)}
+.route-body.open{display:block}
+/* stop builder */
+.stop-builder{border:1px solid var(--gray2);border-radius:7px;margin-bottom:6px;overflow:hidden}
+.stop-builder-hdr{background:var(--gray0);padding:6px 10px;font-size:10px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.06em;display:flex;justify-content:space-between;align-items:center}
+.stop-entry{padding:8px 10px;border-top:1px solid var(--gray1)}
+.stop-num-badge{width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;margin-right:6px;flex-shrink:0}
+.stop-mode-toggle{display:flex;gap:4px;margin-bottom:6px}
+.stop-mode-btn{flex:1;padding:4px;border:1px solid var(--gray2);border-radius:5px;font-size:11px;cursor:pointer;background:#fff;color:var(--gray5);text-align:center;font-family:inherit}
+.stop-mode-btn.on{border-color:var(--navy);background:var(--navy);color:#fff}
+/* stop costs */
+.stop-row{padding:7px 10px;border-bottom:1px solid var(--gray1)}
+.stop-row:last-child{border-bottom:none}
+.stop-costs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin:4px 0}
+.stop-cost-cell{background:var(--gray0);border-radius:5px;padding:4px 6px}
+.stop-cost-lbl{font-size:9px;color:var(--gray4);font-weight:500}
+.stop-cost-val{font-size:12px;font-weight:600;color:var(--text)}
+.stop-cost-val.actual{color:var(--green)}
+.stop-cost-val.est{color:var(--gray4)}
+.stop-ups-input{display:flex;align-items:center;gap:5px;margin-top:5px}
+.stop-ups-input label{font-size:10px;color:var(--gray4);white-space:nowrap}
+.stop-ups-input input{flex:1;padding:4px 7px;border:1px solid var(--gray2);border-radius:5px;font-size:11px;color:var(--text);background:#fafafa;outline:none}
+.stop-ups-input input:focus{border-color:var(--green)}
+.stop-ups-input button{background:var(--green-lt);color:var(--green);border:none;border-radius:5px;padding:4px 9px;font-size:10px;cursor:pointer;font-weight:500;font-family:inherit}
+/* planner */
+.planner-stop{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;background:var(--gray0);border:1px solid var(--gray2);margin-bottom:4px}
+.planner-stop-num{width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.planner-result{background:var(--gray0);border-radius:8px;border:1px solid var(--gray2);padding:10px;margin-top:8px}
+.planner-result-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em}
+/* svd */
+.svd-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;border-bottom:1px solid var(--gray1)}
+.svd-row:last-child{border-bottom:none}
+.svd-label{color:var(--gray5);flex:1}
+.svd-win{color:var(--green);font-weight:600}
+.svd-lose{color:var(--red);font-weight:600}
+.hist-badge{display:inline-flex;align-items:center;gap:4px;background:var(--green-lt);border:1px solid #c8e6c9;border-radius:10px;padding:2px 7px;font-size:10px;color:var(--green);margin-bottom:6px}
+.actual-badge{display:inline-flex;align-items:center;background:#E3F2FD;border:1px solid #b5d4f4;border-radius:10px;padding:2px 7px;font-size:10px;color:var(--blue)}
+.est-badge{display:inline-flex;align-items:center;background:var(--gray1);border:1px solid var(--gray2);border-radius:10px;padding:2px 7px;font-size:10px;color:var(--gray4)}
+/* zone badge */
+.zone-badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin:2px}
+.legend{display:flex;flex-direction:column;gap:4px}
+.leg{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--gray5)}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(0,0,0,.15)}
+.status-msg{padding:20px 14px;font-size:12px;color:var(--gray3);text-align:center;line-height:1.7}
+.hint{font-size:10px;color:var(--gray4);font-style:italic;margin-top:3px;min-height:14px}
+.spin{animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--gray2);border-radius:2px}
+.leaflet-popup-content-wrapper{border-radius:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px}
+.leaflet-popup-content{margin:10px 12px}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:10px">
+    <h1>Alma Coffee — Delivery Route Analyzer</h1>
+    <span>Deliver vs. ship · Route planning · Node management</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <span class="badge">Internal</span>
+    <button onclick="resetAllData()" style="background:rgba(255,255,255,.12);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:3px 9px;font-size:10px;cursor:pointer;font-family:inherit" title="Clear all saved data and reset to defaults">Reset data</button>
+  </div>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('analyze')" id="t-analyze">Analyze</div>
+  <div class="tab" onclick="switchTab('planner')" id="t-planner">Route Planner</div>
+  <div class="tab" onclick="switchTab('nodes')" id="t-nodes">Nodes</div>
+  <div class="tab" onclick="switchTab('companies')" id="t-companies">Companies</div>
+  <div class="tab" onclick="switchTab('zones')" id="t-zones">Zones &amp; Routes</div>
+  <div class="tab" onclick="switchTab('add')" id="t-add">Add Node</div>
+  <div class="tab" onclick="switchTab('log')" id="t-log">Route Log</div>
+</div>
+<div class="layout">
+  <div id="map"></div>
+  <div class="panel">
+
+    <!-- ANALYZE -->
+    <div class="panel-scroll" id="p-analyze">
+      <div class="sec">
+        <div class="sec-title">Evaluate a location</div>
+        <div class="fl"><label>Street address *</label><input id="addr-input" type="text" placeholder="e.g. 3400 Cumberland Blvd SE"/></div>
+        <div class="fl"><label>Suite / Building / Unit</label><input id="addr-suite" type="text" placeholder="e.g. Suite 200 (optional)"/></div>
+        <div class="fl"><label>City *</label><input id="addr-city" type="text" placeholder="e.g. Atlanta"/></div>
+        <div class="row2">
+          <div class="fl"><label>State</label><input id="addr-state" type="text" placeholder="GA" value="GA"/></div>
+          <div class="fl"><label>ZIP code</label><input id="addr-zip" type="text" placeholder="e.g. 30339"/></div>
+        </div>
+        <div class="fl"><label>Est. avg order value ($)</label><input id="order-val" type="number" value="300" min="50" step="25"/></div>
+        <div class="fl"><label>Route anchor node <span style="color:var(--gray3);font-weight:400">(auto-suggests nearest)</span></label>
+          <select id="anchor-node"><option value="">— Alma Café only —</option></select></div>
+        <button class="btn btn-primary" id="search-btn" onclick="analyzeAddress()">Analyze location</button>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Departure time</div>
+        <div class="row2">
+          <div class="fl"><label>Day</label>
+            <select id="dep-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5" selected>Friday</option><option value="6">Saturday</option></select></div>
+          <div class="fl"><label>Time</label><input id="dep-time" type="time" value="10:00"/></div>
+        </div>
+        <p class="hint">OpenRouteService with historical traffic patterns</p>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Cost assumptions</div>
+        <div class="row2">
+          <div class="fl"><label>Driver cost/hr ($)</label><input id="driver-rate" type="number" value="15" min="1" step=".5"/></div>
+          <div class="fl"><label>Cost per mile ($)</label><input id="mile-rate" type="number" value="0.70" min=".1" step=".05"/></div>
+        </div>
+        <div class="fl"><label>Viability threshold (% of order)</label><input id="viability-pct" type="number" value="8" min="1" max="30" step=".5"/></div>
+      </div>
+      <div id="result-area"><div class="status-msg">Enter an address to see the deliver vs. ship analysis.</div></div>
+      <div class="sec">
+        <div class="sec-title">Map legend</div>
+        <div class="legend">
+          <div class="leg"><div class="leg-dot" style="background:#1B2B4B"></div>Alma Roastery / Café</div>
+          <div class="leg"><div class="leg-dot" style="background:#2E7D32"></div>Anchor account</div>
+          <div class="leg"><div class="leg-dot" style="background:#1565C0"></div>Regular delivery node</div>
+          <div class="leg"><div class="leg-dot" style="background:#6A1B9A"></div>Multi-location node</div>
+          <div class="leg"><div class="leg-dot" style="background:#E65100"></div>Address being evaluated</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROUTE PLANNER -->
+    <div class="panel-scroll" id="p-planner" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Route Planner</div>
+        <div class="fl"><label>Route name</label><input id="pl-name" type="text" placeholder="e.g. Monday NW Run"/></div>
+        <div class="row2">
+          <div class="fl"><label>Day</label>
+            <select id="pl-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5" selected>Friday</option><option value="6">Saturday</option></select></div>
+          <div class="fl"><label>Depart time</label><input id="pl-time" type="time" value="09:00"/></div>
+        </div>
+        <div class="fl"><label>Load from saved route (optional)</label>
+          <select id="pl-load-route" onchange="loadPlannerFromRoute()"><option value="">— Start from scratch —</option></select></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Stops</div>
+        <div class="fl"><label>Add a node to this route</label>
+          <select id="pl-node-select"><option value="">— Select node —</option></select></div>
+        <button class="btn btn-primary" onclick="addPlannerStop()">Add stop</button>
+        <div id="planner-stops" style="margin-top:8px"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Est. order value per stop ($)</div>
+        <input id="pl-order-val" type="number" value="350" min="0" step="25"/>
+        <p class="hint" style="margin-top:4px">Used to calculate shipping cost comparison and viability</p>
+      </div>
+      <button class="btn btn-gold" onclick="runPlanner()" style="margin:12px 14px 4px">Calculate route</button>
+      <div id="planner-result"></div>
+      <div style="padding:0 14px 12px">
+        <button class="btn btn-success" onclick="convertPlannerToLog()">Convert to Route Log</button>
+        <div class="hint" style="margin-top:4px">Creates a pre-filled log entry — actual date, driver, and mileage filled in on delivery day</div>
+      </div>
+    </div>
+
+    <!-- NODES -->
+    <div class="panel-scroll" id="p-nodes" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Delivery nodes <span id="node-count" style="color:var(--gold);font-weight:700;margin-left:4px"></span></div>
+        <div id="node-list"></div>
+      </div>
+    </div>
+
+    <!-- COMPANIES -->
+    <div class="panel-scroll" id="p-companies" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Create company</div>
+        <div class="fl"><label>Company name</label><input id="co-name" type="text" placeholder="e.g. Metzcorp"/></div>
+        <div class="fl"><label>Notes</label><input id="co-notes" type="text" placeholder="Optional"/></div>
+        <div class="fl"><label>Pin color (applies to all linked nodes)</label>
+          <div class="color-picker" id="co-color-picker"></div></div>
+        <button class="btn btn-gold" onclick="addCompany()">Create company</button>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All companies</div>
+        <div id="company-list"></div>
+      </div>
+    </div>
+
+    <!-- ZONES & ROUTES -->
+    <div class="panel-scroll" id="p-zones" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Create a delivery zone</div>
+        <div class="fl"><label>Zone name</label><input id="zone-name" type="text" placeholder="e.g. NW Corridor, 1-Day Zone A"/></div>
+        <div class="fl"><label>Description / Day</label><input id="zone-desc" type="text" placeholder="e.g. Monday deliveries, Cherokee County"/></div>
+        <div class="fl"><label>Zone color</label>
+          <div class="color-picker" id="zone-color-picker"></div></div>
+        <button class="btn btn-gold" onclick="addZone()">Create zone</button>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All zones</div>
+        <div id="zone-list"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Create a named route</div>
+        <div class="fl"><label>Route name</label><input id="rt-name" type="text" placeholder="e.g. Monday NW Run"/></div>
+        <div class="fl"><label>Delivery day</label>
+          <select id="rt-day"><option value="0">Sunday</option><option value="1">Monday</option><option value="2">Tuesday</option><option value="3">Wednesday</option><option value="4">Thursday</option><option value="5">Friday</option><option value="6">Saturday</option></select></div>
+        <div class="fl"><label>Zone (optional)</label>
+          <select id="rt-zone"><option value="">— No zone —</option></select></div>
+        <button class="btn btn-gold" onclick="addNamedRoute()">Create route</button>
+      </div>
+      <div class="sec">
+        <div class="sec-title">All named routes</div>
+        <div id="named-route-list"></div>
+      </div>
+    </div>
+
+    <!-- ADD NODE -->
+    <div class="panel-scroll" id="p-add" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Add a new node</div>
+        <div class="fl"><label>Account name *</label><input id="new-name" type="text" placeholder="Business name"/></div>
+        <div class="fl"><label>Street address *</label><input id="new-addr" type="text" placeholder="e.g. 240 Chambers St"/></div>
+        <div class="fl"><label>Suite / Building / Unit</label><input id="new-suite" type="text" placeholder="e.g. Suite 130, Unit B (optional)"/></div>
+        <div class="fl"><label>City *</label><input id="new-city" type="text" placeholder="e.g. Woodstock"/></div>
+        <div class="row2">
+          <div class="fl"><label>State *</label><input id="new-state" type="text" placeholder="GA" value="GA"/></div>
+          <div class="fl"><label>ZIP code</label><input id="new-zip" type="text" placeholder="e.g. 30188"/></div>
+        </div>
+        <div class="fl"><label>YTD Revenue ($)</label><input id="new-rev" type="number" placeholder="Optional" min="0"/></div>
+        <div class="row2">
+          <div class="fl"><label>Avg order ($)</label><input id="new-avg" type="number" placeholder="300" min="0"/></div>
+          <div class="fl"><label>Orders/month</label><input id="new-freq" type="number" placeholder="2" min="0" step=".5"/></div>
+        </div>
+        <div class="fl"><label>Account type</label>
+          <div class="types">
+            <div class="type-chip on" id="chip-regular" onclick="selType('regular')">Regular</div>
+            <div class="type-chip" id="chip-anchor" onclick="selType('anchor')">Anchor</div>
+            <div class="type-chip" id="chip-multi" onclick="selType('multi')">Multi-loc</div>
+          </div></div>
+        <div class="fl"><label>Assign to company (optional)</label>
+          <select id="new-company"><option value="">— None —</option></select></div>
+        <div class="fl"><label>Assign to zone (optional)</label>
+          <select id="new-zone"><option value="">— No zone —</option></select></div>
+        <div class="fl"><label>Assign to named route (optional)</label>
+          <select id="new-route"><option value="">— No route —</option></select></div>
+        <button class="btn btn-gold" onclick="addNode()">Add to map</button>
+        <div id="add-status" class="hint"></div>
+      </div>
+    </div>
+
+    <!-- ROUTE LOG -->
+    <div class="panel-scroll" id="p-log" style="display:none">
+      <div class="sec">
+        <div class="sec-title">Log a delivery route</div>
+        <div class="row2">
+          <div class="fl"><label>Route date *</label><input id="rl-date" type="date"/></div>
+          <div class="fl"><label>Driver name</label><input id="rl-driver" type="text" placeholder="e.g. Chaz Day"/></div>
+        </div>
+        <div class="row2">
+          <div class="fl"><label>Departed</label><input id="rl-dep" type="time" value="09:00"/></div>
+          <div class="fl"><label>Returned</label><input id="rl-ret" type="time" value="12:00"/></div>
+        </div>
+        <div class="row2">
+          <div class="fl"><label>Total mileage *</label><input id="rl-miles" type="number" placeholder="64" min="0" step="0.1"/></div>
+          <div class="fl"><label>Anchor node</label>
+            <select id="rl-anchor"><option value="">— None —</option></select></div>
+        </div>
+        <div class="fl"><label>Notes</label><textarea id="rl-notes" placeholder="Anything notable…" style="min-height:38px"></textarea></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Delivery stops</span>
+          <div style="display:flex;gap:5px">
+            <button class="btn-sm" style="background:var(--navy);color:#fff;border:none;border-radius:5px;padding:4px 10px;cursor:pointer;font-family:inherit;font-size:11px" onclick="addStopFromCompany()">+ From company</button>
+            <button class="btn-sm btn-link" style="border:none" onclick="addStopEntry()">+ New location</button>
+          </div>
+        </div>
+        <div id="stop-entries" style="margin-top:6px"></div>
+      </div>
+      <div class="sec" style="padding:10px 14px">
+        <button class="btn btn-gold" onclick="logRoute()">Save route</button>
+        <div id="rl-status" class="hint"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Past routes <span id="route-count" style="color:var(--gold);font-weight:700;margin-left:4px"></span></div>
+        <p class="hint" style="margin-bottom:8px">Enter actual UPS cost per stop after looking up the rate.</p>
+        <div id="route-list"></div>
+      </div>
+      <div class="sec">
+        <div class="sec-title">Ship vs. deliver — actual data</div>
+        <div id="svd-summary"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ROASTERY={name:"Alma Roastery / Café",address:"3448 Holly Springs Pkwy, Canton, GA 30115",lat:34.23607,lng:-84.49079};
+const ORS_KEY="5b3ce3597851110001cf6248a5e1ccba58e44e2e84ecb3dc5f8c9c7e";
+const COLORS=['#E53935','#8E24AA','#1E88E5','#00ACC1','#43A047','#FB8C00','#F4511E','#6D4C41','#546E7A','#F06292','#7CB342','#FFB300'];
+const COLOR_NAMES=['Red','Purple','Blue','Teal','Green','Orange','Deep Orange','Brown','Steel Blue','Pink','Lime','Amber'];
+
+// ── Default seed data (only used when localStorage is empty) ──────────────
+const DEFAULT_NODES=[
+  {id:1,name:"Stout Brothers",address:"240 Chambers St, Woodstock, GA 30188",lat:34.09972,lng:-84.52081,revenue:10786,avgOrder:449,ordersPerMo:4.0,type:"anchor",companyId:4,zoneId:null,routeId:null},
+  {id:2,name:"Pie Bar",address:"8720 Main St #130, Woodstock, GA 30188",lat:34.10155,lng:-84.51671,revenue:4722,avgOrder:225,ordersPerMo:3.0,type:"regular",companyId:5,zoneId:null,routeId:null},
+  {id:3,name:"Path & Post",address:"214 River Park N Dr, Woodstock, GA 30188",lat:34.10414,lng:-84.52336,revenue:null,avgOrder:200,ordersPerMo:2.0,type:"regular",companyId:6,zoneId:null,routeId:null},
+  {id:4,name:"Woodstock First Baptist",address:"11905 Highway 92, Woodstock, GA 30188",lat:34.10193,lng:-84.50728,revenue:9307,avgOrder:490,ordersPerMo:2.7,type:"anchor",companyId:7,zoneId:null,routeId:null},
+  {id:5,name:"Nature's Corner (Woodstock)",address:"200 Parkbrooke Dr, Woodstock, GA 30189",lat:34.08041,lng:-84.57387,revenue:3184,avgOrder:159,ordersPerMo:2.9,type:"regular",companyId:3,zoneId:null,routeId:null},
+  {id:6,name:"Nature's Corner (Marietta)",address:"3960 Mary Eliza Trace Ste 500, Marietta, GA 30064",lat:33.98765,lng:-84.54931,revenue:null,avgOrder:159,ordersPerMo:1.5,type:"regular",companyId:3,zoneId:null,routeId:null},
+  {id:7,name:"Metzcorp / HD Supply",address:"3400 Cumberland Blvd SE, Atlanta, GA 30339",lat:33.87802,lng:-84.46611,revenue:15384,avgOrder:550,ordersPerMo:5.2,type:"multi",companyId:2,zoneId:null,routeId:null},
+  {id:8,name:"Buckhead Beans",address:"3131 Piedmont Rd NE, Atlanta, GA 30305",lat:33.84784,lng:-84.36318,revenue:32682,avgOrder:1181,ordersPerMo:1.0,type:"anchor",companyId:8,zoneId:null,routeId:null},
+  {id:9,name:"Hoschton Coffee Company",address:"73 City Square St, Hoschton, GA 30548",lat:34.09672,lng:-83.76121,revenue:24683,avgOrder:726,ordersPerMo:5.7,type:"anchor",companyId:9,zoneId:null,routeId:null},
+  {id:10,name:"Burnt Hickory Church",address:"5145 Due W Rd NW, Powder Springs, GA 30127",lat:33.96641,lng:-84.67832,revenue:1325,avgOrder:331,ordersPerMo:1.0,type:"regular",companyId:10,zoneId:null,routeId:null},
+  {id:11,name:"Bloom Roadside",address:"Woodstock, GA",lat:34.10140,lng:-84.51900,revenue:6200,avgOrder:387,ordersPerMo:3.2,type:"regular",companyId:11,zoneId:null,routeId:null},
+  {id:12,name:"Noey's Coffee Cart",address:"Roswell, GA",lat:34.02305,lng:-84.35984,revenue:6765,avgOrder:205,ordersPerMo:4.7,type:"regular",companyId:12,zoneId:null,routeId:null},
+  {id:13,name:"ROCO Kitchen & Coffee",address:"Canton area, GA",lat:34.19800,lng:-84.50100,revenue:19777,avgOrder:860,ordersPerMo:3.8,type:"anchor",companyId:13,zoneId:null,routeId:null},
+  {id:14,name:"J Michaels Prime",address:"Woodstock, GA",lat:34.09800,lng:-84.51500,revenue:2012,avgOrder:287,ordersPerMo:1.2,type:"regular",companyId:14,zoneId:null,routeId:null},
+  {id:15,name:"Cardinal Coffee",address:"Kennesaw, GA",lat:34.02310,lng:-84.61450,revenue:3004,avgOrder:501,ordersPerMo:1.2,type:"regular",companyId:15,zoneId:null,routeId:null},
+  {id:16,name:"Eden",address:"470 Chambers St, Woodstock, GA 30188",lat:34.10025,lng:-84.52048,revenue:1561,avgOrder:173,ordersPerMo:3.0,type:"regular",companyId:16,zoneId:null,routeId:null},
+  {id:17,name:"Reformation Brewery",address:"105 Elm St, Woodstock, GA 30188",lat:34.10078,lng:-84.51952,revenue:1534,avgOrder:307,ordersPerMo:1.7,type:"regular",companyId:17,zoneId:null,routeId:null},
+  {id:18,name:"1885 Grill",address:"4438 Cherokee St, Acworth, GA 30101",lat:34.06513,lng:-84.67258,revenue:600,avgOrder:600,ordersPerMo:0.3,type:"regular",companyId:1,zoneId:null,routeId:null},
+  {id:19,name:"Circle of Friends Inc",address:"2864 East Cherokee Drive, Canton, GA 30115",lat:34.22855,lng:-84.49312,revenue:1045,avgOrder:209,ordersPerMo:1.7,type:"regular",companyId:18,zoneId:null,routeId:null},
+  {id:20,name:"The Corner Butcher Shop",address:"10515 Bells Ferry Road, Canton, GA 30114",lat:34.19623,lng:-84.52841,revenue:458,avgOrder:229,ordersPerMo:0.7,type:"regular",companyId:19,zoneId:null,routeId:null},
+  {id:21,name:"1885 Grill Kennesaw",address:"2840 S Main St, Kennesaw, GA 30144",lat:34.01387,lng:-84.61524,revenue:600,avgOrder:600,ordersPerMo:0.3,type:"regular",companyId:1,zoneId:null,routeId:null},
+  {id:22,name:"Universal Alloy",address:"180 Lamar Haley Pkwy, Canton, GA 30114",lat:34.20145,lng:-84.52198,revenue:null,avgOrder:null,ordersPerMo:null,type:"anchor",companyId:20,zoneId:null,routeId:null},
+  {id:23,name:"Coffee Bar Co",address:"509 Quinn Drive, Woodstock, GA 30188",lat:34.10210,lng:-84.51820,revenue:519,avgOrder:86,ordersPerMo:2.0,type:"regular",companyId:21,zoneId:null,routeId:null},
+  {id:24,name:"The Butcher's Block",address:"1025 Rose Creek Dr Ste 140, Woodstock, GA 30189",lat:34.08560,lng:-84.51340,revenue:284,avgOrder:284,ordersPerMo:0.3,type:"regular",companyId:22,zoneId:null,routeId:null},
+  {id:25,name:"Petunias Coffee Pot",address:"123 Picketts Forge Lane, Acworth, GA 30101",lat:34.06240,lng:-84.67180,revenue:261,avgOrder:52,ordersPerMo:1.7,type:"regular",companyId:23,zoneId:null,routeId:null},
+  {id:26,name:"VISIT WOODSTOCK GA",address:"8588 Main Street, Woodstock, GA 30188",lat:34.10190,lng:-84.51610,revenue:216,avgOrder:216,ordersPerMo:0.3,type:"regular",companyId:24,zoneId:null,routeId:null},
+  {id:27,name:"Playdate Cafe",address:"1714 Marble Quarry Rd, Canton, GA 30115",lat:34.22640,lng:-84.47820,revenue:732,avgOrder:91,ordersPerMo:2.7,type:"regular",companyId:25,zoneId:null,routeId:null},
+  {id:28,name:"Arlowe's Bakehouse",address:"226 Hampton Station Blvd, Canton, GA 30115",lat:34.22980,lng:-84.49560,revenue:326,avgOrder:326,ordersPerMo:0.3,type:"regular",companyId:26,zoneId:null,routeId:null},
+  {id:29,name:"Cherokee County Fire & EMS",address:"3985 Holly Springs Pkwy, Canton, GA 30115",lat:34.23420,lng:-84.48960,revenue:300,avgOrder:300,ordersPerMo:0.3,type:"regular",companyId:27,zoneId:null,routeId:null},
+  {id:30,name:"Journey Christian Church",address:"415 Charles Cox Drive, Canton, GA 30115",lat:34.22180,lng:-84.49710,revenue:235,avgOrder:118,ordersPerMo:0.7,type:"regular",companyId:28,zoneId:null,routeId:null},
+  {id:31,name:"We2Friends Coffeehouse",address:"4651 Union Hill Rd, Alpharetta, GA 30004",lat:34.07980,lng:-84.28640,revenue:2041,avgOrder:120,ordersPerMo:5.7,type:"anchor",companyId:29,zoneId:null,routeId:null},
+  {id:32,name:"Fluffy Fluffy",address:"4400 Roswell Road Ste 146, Marietta, GA 30062",lat:33.98540,lng:-84.41280,revenue:600,avgOrder:300,ordersPerMo:0.7,type:"regular",companyId:30,zoneId:null,routeId:null},
+  {id:33,name:"Woodstock City Church",address:"4350 North Point Pkwy, Alpharetta, GA 30022",lat:34.02180,lng:-84.27460,revenue:589,avgOrder:294,ordersPerMo:0.7,type:"regular",companyId:31,zoneId:null,routeId:null},
+  {id:34,name:"New Salem Baptist Church",address:"836 New Salem Road, Kennesaw, GA 30152",lat:34.02640,lng:-84.64180,revenue:434,avgOrder:217,ordersPerMo:0.7,type:"regular",companyId:32,zoneId:null,routeId:null},
+  {id:35,name:"Baladi Coffee",address:"3061 George Busbee Pkwy NW, Kennesaw, GA 30144",lat:34.01920,lng:-84.60340,revenue:377,avgOrder:126,ordersPerMo:1.0,type:"regular",companyId:33,zoneId:null,routeId:null},
+  {id:36,name:"St Phillips Cathedral",address:"2744 Peachtree Rd NW, Atlanta, GA 30305",lat:33.84620,lng:-84.36140,revenue:466,avgOrder:233,ordersPerMo:0.7,type:"regular",companyId:34,zoneId:null,routeId:null},
+];
+const DEFAULT_ROUTES=[
+  {id:'r1',date:'2026-06-26',driver:'',dep:'08:30',ret:'10:50',miles:64,anchorId:null,stops:[{name:'Pie Bar',address:'8720 Main St #130, Woodstock, GA 30188',order:'#127889',actualUps:null},{name:'Woodstock First Baptist',address:'11905 Highway 92, Woodstock, GA 30188',order:'#127903',actualUps:null},{name:'Path & Post',address:'214 River Park N Dr, Woodstock, GA 30188',order:'',actualUps:null},{name:'Metzcorp / HD Supply',address:'3400 Cumberland Blvd SE, Atlanta, GA 30339',order:'#128095',actualUps:null}],notes:'All delivered same run'},
+  {id:'r2',date:'2026-06-30',driver:'',dep:'09:00',ret:'10:50',miles:46,anchorId:1,stops:[{name:'Stout Brothers',address:'240 Chambers St, Woodstock, GA 30188',order:'#128288',actualUps:null},{name:'Buckhead Beans',address:'3131 Piedmont Rd NE, Atlanta, GA 30305',order:'#128389',actualUps:null},{name:"Nature's Corner (Woodstock)",address:'200 Parkbrooke Dr, Woodstock, GA 30189',order:'#128463',actualUps:null}],notes:''},
+  {id:'r3',date:'2026-07-03',driver:'',dep:'09:00',ret:'10:30',miles:37,anchorId:1,stops:[{name:'Stout Brothers',address:'240 Chambers St, Woodstock, GA 30188',order:'#128288',actualUps:null},{name:'Buckhead Beans',address:'3131 Piedmont Rd NE, Atlanta, GA 30305',order:'#128389',actualUps:null},{name:"Nature's Corner (Woodstock)",address:'200 Parkbrooke Dr, Woodstock, GA 30189',order:'#128463',actualUps:null}],notes:'Holiday week'},
+  {id:'r4',date:'2026-07-10',driver:'',dep:'09:15',ret:'11:41',miles:71,anchorId:null,stops:[{name:'Pie Bar',address:'8720 Main St #130, Woodstock, GA 30188',order:'#129010',actualUps:null},{name:"Nature's Corner (Woodstock)",address:'200 Parkbrooke Dr, Woodstock, GA 30189',order:'#129023',actualUps:null},{name:'Metzcorp / HD Supply',address:'3400 Cumberland Blvd SE, Atlanta, GA 30339',order:'#129172',actualUps:null}],notes:'HD Supply no order this week'},
+];
+
+// ── Supabase backend ──────────────────────────────────────────────────────
+const SUPA_URL = 'https://dclvscfotnhhknhbgzhm.supabase.co';
+const SUPA_KEY = 'sb_publishable_y73d0HrHRiLNBX1RdbOWBQ_98CGANOu';
+
+async function sbGet(table){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/${table}?select=*&order=id.asc`,{
+      headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`}
+    });
+    if(!r.ok)return [];
+    return r.json();
+  }catch(e){return [];}
+}
+async function sbUpsert(table,row){
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/${table}`,{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`,
+               'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+      body:JSON.stringify(row)
+    });
+  }catch(e){console.warn('upsert failed',table,e);}
+}
+async function sbDelete(table,id){
+  try{
+    await fetch(`${SUPA_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`,{
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`}
+    });
+  }catch(e){console.warn('delete failed',table,e);}
+}
+
+function nodeToRow(n){return{id:n.id,name:n.name,address:n.address,lat:n.lat,lng:n.lng,revenue:n.revenue||null,avg_order:n.avgOrder||null,orders_per_mo:n.ordersPerMo||null,type:n.type||'regular',company_id:n.companyId||null,zone_id:n.zoneId||null,route_id:n.routeId||null,node_ids:n.nodeIds?JSON.stringify(n.nodeIds):null};}
+function rowToNode(r){return{id:r.id,name:r.name,address:r.address,lat:r.lat,lng:r.lng,revenue:r.revenue,avgOrder:r.avg_order,ordersPerMo:r.orders_per_mo,type:r.type||'regular',companyId:r.company_id,zoneId:r.zone_id,routeId:r.route_id,nodeIds:r.node_ids?(typeof r.node_ids==='string'?JSON.parse(r.node_ids):r.node_ids):null};}
+function companyToRow(c){return{id:c.id,name:c.name,notes:c.notes||null,color:c.color||null};}
+function rowToCompany(r){return{id:r.id,name:r.name,notes:r.notes,color:r.color};}
+function zoneToRow(z){return{id:z.id,name:z.name,description:z.desc||null,color:z.color||null};}
+function rowToZone(r){return{id:r.id,name:r.name,desc:r.description,color:r.color};}
+function nrToRow(rt){return{id:rt.id,name:rt.name,day:rt.day||0,zone_id:rt.zoneId||null,color:rt.color||null,visible:false,node_ids:rt.nodeIds?JSON.stringify(rt.nodeIds):null};}
+function rowToNr(r){return{id:r.id,name:r.name,day:r.day,zoneId:r.zone_id,color:r.color,visible:false,nodeIds:r.node_ids?(typeof r.node_ids==='string'?JSON.parse(r.node_ids):r.node_ids):null};}
+function routeToRow(rt){return{id:rt.id,date:rt.date||null,driver:rt.driver||null,dep:rt.dep||null,ret:rt.ret||null,miles:rt.miles||null,anchor_id:rt.anchorId||null,stops:JSON.stringify(rt.stops||[]),notes:rt.notes||null,from_planner:rt.fromPlanner||false};}
+function rowToRoute(r){return{id:r.id,date:r.date,driver:r.driver||'',dep:r.dep||'09:00',ret:r.ret||'12:00',miles:r.miles||0,anchorId:r.anchor_id,stops:typeof r.stops==='string'?JSON.parse(r.stops):r.stops||[],notes:r.notes||'',fromPlanner:r.from_planner||false};}
+
+async function saveState(){
+  try{
+    await Promise.all([
+      ...NODES.map(n=>sbUpsert('nodes',nodeToRow(n))),
+      ...COMPANIES.map(c=>sbUpsert('companies',companyToRow(c))),
+      ...ZONES.map(z=>sbUpsert('zones',zoneToRow(z))),
+      ...NAMED_ROUTES.map(rt=>sbUpsert('named_routes',nrToRow(rt))),
+      ...ROUTES.map(rt=>sbUpsert('routes',routeToRow(rt))),
+    ]);
+  }catch(e){console.warn('Supabase save error:',e);}
+}
+
+async function deleteFromDb(table,id){await sbDelete(table,id);}
+
+function showLoading(msg){
+  let el=document.getElementById('loading-overlay');
+  if(!el){el=document.createElement('div');el.id='loading-overlay';
+    el.style.cssText='position:fixed;inset:0;background:rgba(27,43,75,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;gap:12px';
+    document.body.appendChild(el);}
+  el.innerHTML=`<div style="font-size:32px">☕</div><div style="font-size:14px;font-weight:500;opacity:.9">${msg||'Loading…'}</div>`;
+  el.style.display='flex';
+}
+function hideLoading(){const el=document.getElementById('loading-overlay');if(el)el.style.display='none';}
+
+function resetAllData(){
+  if(!confirm('Reset all data? This will clear the shared database and reload defaults. Cannot be undone.'))return;
+  NODES=DEFAULT_NODES;COMPANIES=DEFAULT_COMPANIES;
+  ZONES=[];NAMED_ROUTES=DEFAULT_NAMED_ROUTES;ROUTES=DEFAULT_ROUTES;
+  nextId=37;nextCoId=35;nextZoneId=1;nextNrId=5;
+  saveState().then(()=>location.reload());
+}
+
+const DEFAULT_COMPANIES=[
+  {id:1, name:"1885 Grill",              notes:"Acworth and Kennesaw locations",       color:"#E53935"},
+  {id:2, name:"Metzcorp",                notes:"Multiple sub-locations, Atlanta metro", color:"#8E24AA"},
+  {id:3, name:"Nature's Corner Market",  notes:"Woodstock and Marietta locations",      color:"#1E88E5"},
+  {id:4, name:"Stout Brothers",          notes:"240 Chambers St, Woodstock",           color:"#43A047"},
+  {id:5, name:"Pie Bar",                 notes:"8720 Main St, Woodstock",              color:"#FB8C00"},
+  {id:6, name:"Path & Post",             notes:"214 River Park N Dr, Woodstock",       color:"#00ACC1"},
+  {id:7, name:"Woodstock First Baptist", notes:"11905 Hwy 92, Woodstock",              color:"#6D4C41"},
+  {id:8, name:"Buckhead Beans",          notes:"3131 Piedmont Rd NE, Atlanta",         color:"#F06292"},
+  {id:9, name:"Hoschton Coffee Company", notes:"73 City Square St, Hoschton",          color:"#7CB342"},
+  {id:10,name:"Burnt Hickory Church",    notes:"5145 Due W Rd NW, Powder Springs",     color:"#FFB300"},
+  {id:11,name:"Bloom Roadside",          notes:"Woodstock, GA",                        color:"#546E7A"},
+  {id:12,name:"Noey's Coffee Cart",      notes:"Roswell, GA",                          color:"#E53935"},
+  {id:13,name:"ROCO Kitchen & Coffee",   notes:"Canton area, GA",                      color:"#8E24AA"},
+  {id:14,name:"J Michaels Prime",        notes:"Woodstock, GA",                        color:"#1E88E5"},
+  {id:15,name:"Cardinal Coffee",         notes:"Kennesaw, GA",                         color:"#43A047"},
+  {id:16,name:"Eden",                    notes:"470 Chambers St, Woodstock",           color:"#FB8C00"},
+  {id:17,name:"Reformation Brewery",     notes:"105 Elm St, Woodstock",                color:"#00ACC1"},
+  {id:18,name:"Circle of Friends Inc",   notes:"2864 E Cherokee Dr, Canton",           color:"#6D4C41"},
+  {id:19,name:"The Corner Butcher Shop", notes:"10515 Bells Ferry Rd, Canton",         color:"#F06292"},
+  {id:20,name:"Universal Alloy",         notes:"180 Lamar Haley Pkwy, Canton",         color:"#7CB342"},
+  {id:21,name:"Coffee Bar Co",           notes:"509 Quinn Dr, Woodstock",              color:"#FFB300"},
+  {id:22,name:"The Butcher's Block",     notes:"1025 Rose Creek Dr, Woodstock",        color:"#546E7A"},
+  {id:23,name:"Petunias Coffee Pot",     notes:"123 Picketts Forge Lane, Acworth",     color:"#E53935"},
+  {id:24,name:"VISIT WOODSTOCK GA",      notes:"8588 Main St, Woodstock",              color:"#8E24AA"},
+  {id:25,name:"Playdate Cafe",           notes:"1714 Marble Quarry Rd, Canton",        color:"#1E88E5"},
+  {id:26,name:"Arlowe's Bakehouse",      notes:"226 Hampton Station Blvd, Canton",     color:"#43A047"},
+  {id:27,name:"Cherokee County Fire & EMS",notes:"3985 Holly Springs Pkwy, Canton",   color:"#FB8C00"},
+  {id:28,name:"Journey Christian Church",notes:"415 Charles Cox Dr, Canton",           color:"#00ACC1"},
+  {id:29,name:"We2Friends Coffeehouse",  notes:"4651 Union Hill Rd, Alpharetta",       color:"#6D4C41"},
+  {id:30,name:"Fluffy Fluffy",           notes:"4400 Roswell Rd, Marietta",            color:"#F06292"},
+  {id:31,name:"Woodstock City Church",   notes:"4350 North Point Pkwy, Alpharetta",    color:"#7CB342"},
+  {id:32,name:"New Salem Baptist Church",notes:"836 New Salem Rd, Kennesaw",           color:"#FFB300"},
+  {id:33,name:"Baladi Coffee",           notes:"3061 George Busbee Pkwy, Kennesaw",    color:"#546E7A"},
+  {id:34,name:"St Phillips Cathedral",   notes:"2744 Peachtree Rd NW, Atlanta",        color:"#E53935"},
+];
+const DEFAULT_NAMED_ROUTES=[
+  {id:1,name:"Woodstock / Acworth Run",day:5,zoneId:null,color:"#1E88E5",visible:false,nodeIds:[1,2,3,4,11,14,16,17,18,23,24,25,26]},
+  {id:2,name:"Canton / NW Cherokee Run",day:1,zoneId:null,color:"#43A047",visible:false,nodeIds:[13,19,20,22,27,28,29,30]},
+  {id:3,name:"Kennesaw / Marietta / Alpharetta Run",day:3,zoneId:null,color:"#FB8C00",visible:false,nodeIds:[6,12,15,21,31,32,33,34,35]},
+  {id:4,name:"Atlanta / Buckhead Run",day:4,zoneId:null,color:"#E53935",visible:false,nodeIds:[7,8,36]},
+];
+
+let NODES=[], COMPANIES=[], ZONES=[], NAMED_ROUTES=[], ROUTES=[];
+let nextId=37, nextCoId=35, nextZoneId=1, nextNrId=5;
+
+async function loadFromSupabase(){
+  showLoading('Loading Alma Coffee delivery data…');
+  try{
+    const [nodes,companies,zones,namedRoutes,routes]=await Promise.all([
+      sbGet('nodes'),sbGet('companies'),sbGet('zones'),sbGet('named_routes'),sbGet('routes')
+    ]);
+    const hasNodes=nodes&&nodes.length>0;
+    NODES        =hasNodes?nodes.map(rowToNode):DEFAULT_NODES;
+    COMPANIES    =(companies&&companies.length)?companies.map(rowToCompany):DEFAULT_COMPANIES;
+    ZONES        =(zones&&zones.length)?zones.map(rowToZone):[];
+    NAMED_ROUTES =(namedRoutes&&namedRoutes.length)?namedRoutes.map(rowToNr):DEFAULT_NAMED_ROUTES;
+    ROUTES       =(routes&&routes.length)?routes.map(rowToRoute):DEFAULT_ROUTES;
+    if(NODES.length)        nextId    =Math.max(...NODES.map(n=>n.id))+1;
+    if(COMPANIES.length)    nextCoId  =Math.max(...COMPANIES.map(c=>c.id))+1;
+    if(ZONES.length)        nextZoneId=Math.max(...ZONES.map(z=>z.id))+1;
+    if(NAMED_ROUTES.length) nextNrId  =Math.max(...NAMED_ROUTES.map(r=>r.id))+1;
+    if(!hasNodes) await saveState();
+  }catch(e){
+    console.error('Load failed, using defaults:',e);
+    NODES=DEFAULT_NODES;COMPANIES=DEFAULT_COMPANIES;
+    ZONES=[];NAMED_ROUTES=DEFAULT_NAMED_ROUTES;ROUTES=DEFAULT_ROUTES;
+  }
+  hideLoading();
+  initApp();
+}
+let newType='regular',selectedCoColor=COLORS[1],selectedZoneColor=COLORS[0];
+let markers={},newMarker=null,lineLayer=null,plannerLayer=null,editingId=null,selectedRouteId=null,routeMapLayer=null;
+let plannerStops=[],stopEntries=[];
+let routeLayers={}; // per named-route map layers keyed by route id
+
+function nodeColor(n){
+  if(n.companyId){const co=COMPANIES.find(c=>c.id===n.companyId);if(co&&co.color)return co.color;}
+  return n.type==='anchor'?'#2E7D32':n.type==='multi'?'#6A1B9A':'#1565C0';
+}
+function makeIcon(color,size){
+  return L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:2.5px solid rgba(255,255,255,.9);box-shadow:0 2px 6px rgba(0,0,0,.35)"></div>`,iconSize:[size,size],iconAnchor:[size/2,size/2]});
+}
+function buildPopup(n){
+  const co=n.companyId?COMPANIES.find(c=>c.id===n.companyId):null;
+  const zone=n.zoneId?ZONES.find(z=>z.id===n.zoneId):null;
+  const route=n.routeId?NAMED_ROUTES.find(r=>r.id===n.routeId):null;
+  const rev=n.revenue?`$${n.revenue.toLocaleString()} YTD`:'—';
+  return `<div style="font-size:12px;min-width:155px">
+    <b style="font-size:13px">${n.name}</b>
+    ${co?`<div style="font-size:10px;margin-top:1px"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${co.color||'#888'}"></span> ${co.name}</div>`:''}
+    ${zone?`<div style="font-size:10px;color:${zone.color||'#888'};margin-top:1px">Zone: ${zone.name}</div>`:''}
+    ${route?`<div style="font-size:10px;color:var(--navy);margin-top:1px">Route: ${route.name}</div>`:''}
+    <div style="color:#888;font-size:10px;margin:3px 0">${n.address}</div>
+    <hr style="border:none;border-top:1px solid #eee;margin:5px 0">
+    <span style="color:#888">Revenue:</span> ${rev}<br>
+    <span style="color:#888">Avg order:</span> $${n.avgOrder||'—'} · <span style="color:#888">Orders/mo:</span> ${n.ordersPerMo||'—'}
+  </div>`;
+}
+
+const map=L.map('map').setView([34.10,-84.45],10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(map);
+L.marker([ROASTERY.lat,ROASTERY.lng],{icon:makeIcon('#1B2B4B',17)}).addTo(map)
+  .bindPopup(`<div style="font-size:12px"><b>Alma Roastery / Café</b><div style="color:#888;font-size:10px;margin:3px 0">${ROASTERY.address}</div></div>`);
+
+function placeMarker(n){
+  if(markers[n.id])map.removeLayer(markers[n.id]);
+  const m=L.marker([n.lat,n.lng],{icon:makeIcon(nodeColor(n),13)}).addTo(map);
+  m.bindPopup(buildPopup(n));markers[n.id]=m;
+}
+NODES.forEach(placeMarker);
+
+function refreshAllMarkers(){NODES.forEach(n=>{placeMarker(n);});}
+
+function populateDropdowns(){
+  const nOpts=NODES.map(n=>`<option value="${n.id}">${n.name}</option>`).join('');
+  ['anchor-node','pl-node-select','rl-anchor'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const prefix=id==='anchor-node'?'<option value="">— Alma Café only —</option>':id==='rl-anchor'?'<option value="">— None —</option>':'<option value="">— Select node —</option>';
+    el.innerHTML=prefix+nOpts;
+  });
+  const coOpts='<option value="">— None —</option>'+COMPANIES.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  ['new-company'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=coOpts;});
+  const zOpts='<option value="">— No zone —</option>'+ZONES.map(z=>`<option value="${z.id}">${z.name}</option>`).join('');
+  ['new-zone','rt-zone'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=zOpts;});
+  const rtOpts='<option value="">— No route —</option>'+NAMED_ROUTES.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  ['new-route'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=rtOpts;});
+  const plRtOpts='<option value="">— Start from scratch —</option>'+NAMED_ROUTES.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  const plEl=document.getElementById('pl-load-route');if(plEl)plEl.innerHTML=plRtOpts;
+}
+// populateDropdowns() called in initApp() after Supabase loads
+
+function buildColorPicker(containerId,currentColor,onSelect){
+  const el=document.getElementById(containerId);if(!el)return;
+  el.innerHTML=COLORS.map((c,i)=>`<div class="color-swatch${currentColor===c?' selected':''}" style="background:${c}" title="${COLOR_NAMES[i]}" onclick="(${onSelect.toString()})(this,'${c}')"></div>`).join('');
+}
+function selectCoColor(el,color){
+  selectedCoColor=color;
+  document.querySelectorAll('#co-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));
+  el.classList.add('selected');
+}
+function selectZoneColor(el,color){
+  selectedZoneColor=color;
+  document.querySelectorAll('#zone-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));
+  el.classList.add('selected');
+}
+// buildColorPicker called in initApp()
+
+function haversine(a,b,c,d){
+  const R=3958.8,dL=(c-a)*Math.PI/180,dG=(d-b)*Math.PI/180;
+  const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function upsRate(lbs){if(lbs<=2)return 9.50;if(lbs<=5)return 11.25;if(lbs<=10)return 13.50;if(lbs<=15)return 15.75;if(lbs<=20)return 18.00;if(lbs<=25)return 20.50;if(lbs<=30)return 22.75;if(lbs<=40)return 26.50;if(lbs<=50)return 30.25;if(lbs<=60)return 34.00;if(lbs<=70)return 38.50;if(lbs<=80)return 43.00;return 43+(lbs-80)*0.55;}
+function estLbs(v){if(v>=400)return Math.min(80,Math.round(v/55)*5.75+1.0);return Math.max(3,Math.round(v/8)*0.75+0.75);}
+async function getOrs(fromLat,fromLng,toLat,toLng){
+  try{const url=`https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_KEY}&start=${fromLng},${fromLat}&end=${toLng},${toLat}`;const r=await fetch(url);if(!r.ok)return null;const d=await r.json();const seg=d.features?.[0]?.properties?.segments?.[0];if(!seg)return null;return{distMi:seg.distance/1609.34,durationMin:Math.round(seg.duration/60)};}catch(e){return null;}
+}
+async function getOrsMulti(coords){
+  // coords = [[lng,lat], ...] for ORS
+  try{
+    const body={coordinates:coords,instructions:false};
+    const r=await fetch(`https://api.openrouteservice.org/v2/directions/driving-car/json`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':ORS_KEY},body:JSON.stringify(body)});
+    if(!r.ok)return null;const d=await r.json();
+    const summary=d.routes?.[0]?.summary;if(!summary)return null;
+    return{distMi:summary.distance/1609.34,durationMin:Math.round(summary.duration/60)};
+  }catch(e){return null;}
+}
+
+function switchTab(t){
+  ['analyze','planner','nodes','companies','zones','add','log'].forEach(tab=>{
+    document.getElementById('t-'+tab).classList.toggle('active',tab===t);
+    document.getElementById('p-'+tab).style.display=tab===t?'':'none';
+  });
+  if(t==='nodes')renderNodeList();
+  if(t==='companies'){renderCompanyList();}
+  if(t==='zones'){renderZoneList();renderNamedRouteList();
+    // Re-draw any routes that were visible
+    NAMED_ROUTES.forEach(rt=>{if(rt.visible)drawNamedRouteOnMap(rt);});
+  }
+  if(t==='log'){renderRouteList();renderSvdSummary();}
+  if(t==='planner'){populateDropdowns();renderPlannerStops();}
+}
+function selType(t){newType=t;['regular','anchor','multi'].forEach(x=>document.getElementById('chip-'+x).classList.toggle('on',x===t));}
+
+// ── ANALYZE ────────────────────────────────────────────────────────────────
+async function analyzeAddress(){
+  const addrStreet=document.getElementById('addr-input').value.trim();
+  const addrSuite=document.getElementById('addr-suite').value.trim();
+  const addrCity=document.getElementById('addr-city').value.trim();
+  const addrState=document.getElementById('addr-state').value.trim()||'GA';
+  const addrZip=document.getElementById('addr-zip').value.trim();
+  if(!addrStreet||!addrCity){document.getElementById('result-area').innerHTML='<div class="status-msg">Street address and city are required.</div>';return;}
+  const addrStreetFull=addrSuite?`${addrStreet}, ${addrSuite}`:addrStreet;
+  const orderVal=parseFloat(document.getElementById('order-val').value)||300;
+  const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+  const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+  const viabPct=(parseFloat(document.getElementById('viability-pct').value)||8)/100;
+  const btn=document.getElementById('search-btn');
+  btn.disabled=true;btn.textContent='Locating…';
+  document.getElementById('result-area').innerHTML='<div class="status-msg">Geocoding…</div>';
+  let lat,lng,dispName;
+  try{
+    // Structured search — most reliable
+    const structuredUrl=`https://nominatim.openstreetmap.org/search?format=json&street=${encodeURIComponent(addrStreetFull)}&city=${encodeURIComponent(addrCity)}&state=${encodeURIComponent(addrState)}&postalcode=${encodeURIComponent(addrZip)}&country=US&limit=1`;
+    let r=await fetch(structuredUrl);
+    let d=await r.json();
+    if(!d.length){
+      // Fallback: free-form combined string
+      const freeForm=[addrStreetFull,addrCity,addrZip?`${addrState} ${addrZip}`:addrState,'USA'].join(', ');
+      r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(freeForm)}&limit=1&countrycodes=us`);
+      d=await r.json();
+    }
+    if(!d.length){
+      // Last resort: city + state only
+      r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addrCity+', '+addrState+', USA')}&limit=1&countrycodes=us`);
+      d=await r.json();
+      if(d.length)document.getElementById('result-area').innerHTML='<div class="status-msg" style="color:var(--orange)">Street not found — pinned to city center. Verify the street address.</div>';
+    }
+    if(!d.length){document.getElementById('result-area').innerHTML='<div class="status-msg">Address not found. Check street and city.</div>';btn.disabled=false;btn.textContent='Analyze location';return;}
+    lat=parseFloat(d[0].lat);lng=parseFloat(d[0].lon);
+    dispName=[addrStreetFull,addrCity,addrZip?`${addrState} ${addrZip}`:addrState].filter(Boolean).join(', ');
+  }catch(e){document.getElementById('result-area').innerHTML='<div class="status-msg">Could not locate address.</div>';btn.disabled=false;btn.textContent='Analyze location';return;}
+  if(newMarker)map.removeLayer(newMarker);if(lineLayer)map.removeLayer(lineLayer);
+  newMarker=L.marker([lat,lng],{icon:makeIcon('#E65100',15)}).addTo(map).bindPopup(`<b>Evaluating</b><br><span style="font-size:11px;color:#888">${dispName}</span>`).openPopup();
+  const sorted=[...NODES].map(n=>({...n,dist:haversine(n.lat,n.lng,lat,lng)})).sort((a,b)=>a.dist-b.dist);
+  const nearest=sorted[0];const miCanton=haversine(ROASTERY.lat,ROASTERY.lng,lat,lng);
+  if(!document.getElementById('anchor-node').value&&nearest)document.getElementById('anchor-node').value=nearest.id;
+  const anchorId=parseInt(document.getElementById('anchor-node').value)||null;
+  const anchor=anchorId?NODES.find(n=>n.id===anchorId):null;
+  lineLayer=L.layerGroup();
+  L.polyline([[ROASTERY.lat,ROASTERY.lng],[lat,lng]],{color:'#1B2B4B',weight:2,dashArray:'5,4',opacity:.4}).addTo(lineLayer);
+  if(anchor)L.polyline([[anchor.lat,anchor.lng],[lat,lng]],{color:'#2E7D32',weight:2.5,opacity:.85}).addTo(lineLayer);
+  lineLayer.addTo(map);
+  const allLats=[ROASTERY.lat,lat];if(anchor)allLats.push(anchor.lat);
+  const allLngs=[ROASTERY.lng,lng];if(anchor)allLngs.push(anchor.lng);
+  map.fitBounds([[Math.min(...allLats)-.015,Math.min(...allLngs)-.015],[Math.max(...allLats)+.015,Math.max(...allLngs)+.015]],{padding:[30,30]});
+  document.getElementById('result-area').innerHTML='<div class="status-msg">Getting route data…</div>';
+  const reqs=[getOrs(ROASTERY.lat,ROASTERY.lng,lat,lng)];
+  if(anchor)reqs.push(getOrs(anchor.lat,anchor.lng,lat,lng));
+  const [orsS,orsA]=await Promise.all(reqs);
+  const stMi=(orsS?.distMi||miCanton)*2,stMin=(orsS?.durationMin||Math.round(miCanton/28*60))*2;
+  const stCost=(stMin/60)*drRate+stMi*miRate;
+  let aoCost=null,aoMi=null,aoMin=null;
+  if(anchor){const d2=haversine(anchor.lat,anchor.lng,lat,lng);aoMi=(orsA?.distMi||d2)*2;aoMin=(orsA?.durationMin||Math.round(d2/28*60))*2;aoCost=(aoMin/60)*drRate+aoMi*miRate;}
+  const lbs=estLbs(orderVal),shipCost=upsRate(lbs);
+  function verd(cost){const p=cost/orderVal;if(p<viabPct)return{label:'Viable',cls:'ov-deliver'};if(p<viabPct*1.5)return{label:'Borderline',cls:'ov-border'};return{label:'Ship instead',cls:'ov-ship'};}
+  const costs=[{label:'From Café',cost:stCost},{label:'UPS Ship',cost:shipCost}];
+  if(anchor)costs.push({label:'From node',cost:aoCost});costs.sort((a,b)=>a.cost-b.cost);
+  const pw=costs[0].label;
+  let distTier='Extended',distColor='var(--red)';
+  if(miCanton<=12){distTier='Local';distColor='var(--green)';}else if(miCanton<=25){distTier='Near-regional';distColor='var(--blue)';}else if(miCanton<=45){distTier='Regional';distColor='var(--orange)';}
+  const depDay=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][parseInt(document.getElementById('dep-day').value)];
+  const depTime=document.getElementById('dep-time').value;
+  const co=anchor?.companyId?COMPANIES.find(c=>c.id===anchor.companyId):null;
+  const zone=nearest?.zoneId?ZONES.find(z=>z.id===nearest.zoneId):null;
+  document.getElementById('result-area').innerHTML=`
+<div class="sec">
+  <div style="font-size:10px;color:var(--gray3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Analysis result</div>
+  <div style="font-size:11px;color:var(--gray4);margin-bottom:4px">${dispName}</div>
+  <div style="font-size:9px;color:var(--gray3);margin-bottom:8px">${depDay} ${depTime} · ${orsS?'OpenRouteService':'Estimate'}</div>
+  ${zone?`<div style="margin-bottom:6px"><span class="zone-badge" style="background:${zone.color}22;color:${zone.color};border:1px solid ${zone.color}44">Zone: ${zone.name}</span></div>`:''}
+  <div class="origin-compare">
+    <div class="origin-row${pw==='From Café'?' winner':''}">
+      <div style="flex:1"><div class="origin-label">From Alma Café <span style="font-size:9px;color:var(--gray3)">(standalone)</span></div><div class="origin-sub">${stMi.toFixed(1)} mi · ${stMin} min · ${(stCost/orderVal*100).toFixed(1)}%</div></div>
+      <div style="text-align:right"><div class="origin-cost" style="color:${pw==='From Café'?'var(--green)':'var(--gray5)'}">$${stCost.toFixed(2)}</div><span class="origin-verdict ${verd(stCost).cls}">${verd(stCost).label}</span></div>
+    </div>
+    ${anchor?`<div class="origin-row${pw==='From node'?' winner':''}">
+      <div style="flex:1"><div class="origin-label">From ${anchor.name} <span style="font-size:9px;color:var(--gray3)">(add-on)</span></div><div class="origin-sub">${aoMi.toFixed(1)} mi · ${aoMin} min · ${(aoCost/orderVal*100).toFixed(1)}%</div>${co?`<div style="font-size:9px;color:var(--purple)">${co.name}</div>`:''}</div>
+      <div style="text-align:right"><div class="origin-cost" style="color:${pw==='From node'?'var(--green)':'var(--gray5)'}">$${aoCost.toFixed(2)}</div><span class="origin-verdict ${verd(aoCost).cls}">${verd(aoCost).label}</span></div>
+    </div>`:''}
+    <div class="origin-row${pw==='UPS Ship'?' winner':''}">
+      <div style="flex:1"><div class="origin-label">UPS Ground <span style="font-size:9px;color:var(--gray3)">(ship)</span></div><div class="origin-sub">~${lbs.toFixed(0)} lbs · 1-day zone</div></div>
+      <div style="text-align:right"><div class="origin-cost" style="color:${pw==='UPS Ship'?'var(--green)':'var(--gray5)'}">$${shipCost.toFixed(2)}</div></div>
+    </div>
+  </div>
+  <div class="insight"><b>Recommendation: ${pw}</b> at $${costs[0].cost.toFixed(2)} — saves $${(costs[1].cost-costs[0].cost).toFixed(2)} vs. next best.</div>
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-lbl">Miles from Canton</div><div class="metric-val" style="color:${distColor}">${miCanton.toFixed(1)}</div><div class="metric-sub">${distTier}</div></div>
+    <div class="metric"><div class="metric-lbl">Nearest node</div><div class="metric-val" style="font-size:12px">${nearest.name.split(' ')[0]}</div><div class="metric-sub">${nearest.dist.toFixed(1)} mi</div></div>
+    <div class="metric"><div class="metric-lbl">Min order · Café</div><div class="metric-val" style="color:var(--gold)">$${Math.round(stCost/viabPct).toLocaleString()}</div><div class="metric-sub">at ${(viabPct*100).toFixed(0)}%</div></div>
+    ${anchor?`<div class="metric"><div class="metric-lbl">Min order · Node</div><div class="metric-val" style="color:var(--gold)">$${Math.round(aoCost/viabPct).toLocaleString()}</div><div class="metric-sub">from ${anchor.name.split(' ')[0]}</div></div>`:''}
+  </div>
+</div>`;
+  btn.disabled=false;btn.textContent='Analyze location';
+}
+['addr-input','addr-suite','addr-city','addr-state','addr-zip'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener('keypress',e=>{if(e.key==='Enter')analyzeAddress();});
+});
+
+// ── ROUTE PLANNER ──────────────────────────────────────────────────────────
+function addPlannerStop(){
+  const sel=document.getElementById('pl-node-select');
+  const nId=parseInt(sel.value);if(!nId)return;
+  const n=NODES.find(x=>x.id===nId);if(!n)return;
+  if(plannerStops.find(s=>s.id===nId)){alert('This node is already in the route.');return;}
+  plannerStops.push({...n});
+  renderPlannerStops();drawPlannerOnMap();
+}
+
+function removePlannerStop(idx){plannerStops.splice(idx,1);renderPlannerStops();drawPlannerOnMap();}
+
+function movePlannerStop(idx,dir){
+  const newIdx=idx+dir;if(newIdx<0||newIdx>=plannerStops.length)return;
+  [plannerStops[idx],plannerStops[newIdx]]=[plannerStops[newIdx],plannerStops[idx]];
+  renderPlannerStops();drawPlannerOnMap();
+}
+
+function renderPlannerStops(){
+  const el=document.getElementById('planner-stops');
+  if(!plannerStops.length){el.innerHTML='<div style="font-size:11px;color:var(--gray3);padding:8px 0">No stops yet. Select a node above and click Add stop.</div>';return;}
+  el.innerHTML=plannerStops.map((n,i)=>`
+<div class="planner-stop">
+  <div class="planner-stop-num">${i+1}</div>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:12px;font-weight:500">${n.name}</div>
+    <div style="font-size:10px;color:var(--gray4)">${n.address}</div>
+    <div style="font-size:10px;color:var(--gray4)">Avg order: $${n.avgOrder||'—'}</div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:2px">
+    ${i>0?`<button class="btn-sm btn-ghost" onclick="movePlannerStop(${i},-1)" style="font-size:10px;padding:2px 6px">▲</button>`:'<div style="height:22px"></div>'}
+    ${i<plannerStops.length-1?`<button class="btn-sm btn-ghost" onclick="movePlannerStop(${i},1)" style="font-size:10px;padding:2px 6px">▼</button>`:'<div style="height:22px"></div>'}
+    <button class="btn-sm btn-del" onclick="removePlannerStop(${i})" style="font-size:10px;padding:2px 6px">✕</button>
+  </div>
+</div>`).join('');
+}
+
+function loadPlannerFromRoute(){
+  const rtId=parseInt(document.getElementById('pl-load-route').value);if(!rtId)return;
+  const rt=NAMED_ROUTES.find(r=>r.id===rtId);if(!rt)return;
+  plannerStops=NODES.filter(n=>n.routeId===rtId).map(n=>({...n}));
+  document.getElementById('pl-name').value=rt.name;
+  renderPlannerStops();drawPlannerOnMap();
+}
+
+function drawPlannerOnMap(){
+  if(plannerLayer)map.removeLayer(plannerLayer);
+  if(!plannerStops.length)return;
+  plannerLayer=L.layerGroup();
+  const pts=[[ROASTERY.lat,ROASTERY.lng],...plannerStops.map(n=>[n.lat,n.lng]),[ROASTERY.lat,ROASTERY.lng]];
+  L.polyline(pts,{color:COLORS[2],weight:3,opacity:.85,dashArray:'none'}).addTo(plannerLayer);
+  plannerStops.forEach((n,i)=>{
+    L.circleMarker([n.lat,n.lng],{radius:9,fillColor:nodeColor(n),fillOpacity:1,color:'#fff',weight:2.5}).addTo(plannerLayer).bindPopup(`<b>${i+1}. ${n.name}</b>`);
+  });
+  plannerLayer.addTo(map);
+  if(pts.length>2)map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});
+}
+
+async function runPlanner(){
+  if(plannerStops.length<1){alert('Add at least one stop.');return;}
+  const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+  const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+  const viabPct=(parseFloat(document.getElementById('viability-pct').value)||8)/100;
+  const orderVal=parseFloat(document.getElementById('pl-order-val').value)||350;
+  const el=document.getElementById('planner-result');
+  el.innerHTML='<div class="status-msg"><span class="spin">◌</span> Calculating multi-stop route…</div>';
+
+  const coords=[[ROASTERY.lng,ROASTERY.lat],...plannerStops.map(n=>[n.lng,n.lat]),[ROASTERY.lng,ROASTERY.lat]];
+  const orsResult=await getOrsMulti(coords);
+  
+  let totalMi=0,totalMin=0;
+  if(orsResult){totalMi=orsResult.distMi;totalMin=orsResult.durationMin;}
+  else{
+    // fallback: sum legs
+    const pts=[ROASTERY,...plannerStops,ROASTERY];
+    for(let i=0;i<pts.length-1;i++){totalMi+=haversine(pts[i].lat,pts[i].lng,pts[i+1].lat,pts[i+1].lng);}
+    totalMin=Math.round(totalMi/28*60);
+  }
+
+  const driverCost=(totalMin/60)*drRate;
+  const mileCost=totalMi*miRate;
+  const totalDeliverCost=driverCost+mileCost;
+  const perStop=plannerStops.length>0?totalDeliverCost/plannerStops.length:0;
+  const totalShipEst=plannerStops.reduce((s,n)=>s+upsRate(estLbs(n.avgOrder||orderVal)),0);
+  const totalOrderVal=plannerStops.reduce((s,n)=>s+(n.avgOrder||orderVal),0);
+  const deliverViable=(totalDeliverCost/totalOrderVal)<viabPct;
+  const shipWins=totalShipEst<totalDeliverCost;
+
+  el.innerHTML=`
+<div class="planner-result">
+  <div class="planner-result-title">${document.getElementById('pl-name').value||'Route'} — ${plannerStops.length} stops</div>
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-lbl">Total distance</div><div class="metric-val">${totalMi.toFixed(1)}</div><div class="metric-sub">miles round trip</div></div>
+    <div class="metric"><div class="metric-lbl">Est. drive time</div><div class="metric-val">${totalMin}</div><div class="metric-sub">minutes</div></div>
+    <div class="metric"><div class="metric-lbl">Total route cost</div><div class="metric-val" style="color:${deliverViable?'var(--green)':'var(--red)'}">$${totalDeliverCost.toFixed(2)}</div><div class="metric-sub">${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of orders</div></div>
+    <div class="metric"><div class="metric-lbl">Cost per stop</div><div class="metric-val">$${perStop.toFixed(2)}</div><div class="metric-sub">avg allocated</div></div>
+  </div>
+  <div class="bk">
+    <div class="bk-row"><span>Driver cost (${totalMin} min)</span><span>$${driverCost.toFixed(2)}</span></div>
+    <div class="bk-row"><span>Mileage (${totalMi.toFixed(1)} mi × $${miRate})</span><span>$${mileCost.toFixed(2)}</span></div>
+    <div class="bk-row tot"><span>Total deliver cost</span><span>$${totalDeliverCost.toFixed(2)}</span></div>
+    <div class="bk-row tot"><span>Est. total ship cost</span><span>$${totalShipEst.toFixed(2)}</span></div>
+    <div class="bk-row tot"><span>Deliver vs. ship delta</span><span style="color:${shipWins?'var(--red)':'var(--green)'}">${shipWins?'Ship saves':'Deliver saves'} $${Math.abs(totalDeliverCost-totalShipEst).toFixed(2)}</span></div>
+  </div>
+  <div class="insight">${deliverViable&&!shipWins?`This route is financially viable at ${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of order revenue. Delivery saves $${(totalShipEst-totalDeliverCost).toFixed(2)} vs. shipping all orders.`:shipWins?`Shipping all orders individually would be $${(totalDeliverCost-totalShipEst).toFixed(2)} cheaper. Consider whether the relationship value of showing up in person justifies the difference.`:`Route delivery cost (${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of orders) exceeds the ${(viabPct*100).toFixed(0)}% viability threshold. Consider adding higher-value stops or reducing the route distance.`}</div>
+  <div style="font-size:10px;color:var(--gray4);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Per-stop breakdown</div>
+  ${plannerStops.map(n=>{const sc=upsRate(estLbs(n.avgOrder||orderVal));return`<div class="svd-row"><div class="svd-label">${n.name}</div><div style="font-size:10px">Del: $${perStop.toFixed(2)} · Ship: $${sc.toFixed(2)} · <b style="color:${perStop<sc?'var(--green)':'var(--red)'}">${perStop<sc?'Del wins':'Ship wins'}</b></div></div>`;}).join('')}
+  <div style="margin-top:6px;font-size:10px;color:var(--gray3)">${orsResult?'Route calculated via OpenRouteService':'Route estimated from straight-line distances — actual may vary'}</div>
+</div>`;
+}
+
+function convertPlannerToLog(){
+  if(!plannerStops.length){alert('Add stops to the planner first.');return;}
+  const name=document.getElementById('pl-name').value||'Planned Route';
+  const stops=plannerStops.map(n=>({name:n.name,address:n.address,order:'',actualUps:null}));
+  const newRoute={id:'r'+Date.now(),date:'',driver:'',dep:'09:00',ret:'12:00',miles:0,anchorId:null,stops,notes:`Converted from planner: ${name}`,fromPlanner:true};
+  ROUTES.unshift(newRoute);saveState();
+  switchTab('log');
+  setTimeout(()=>{
+    selectedRouteId=newRoute.id;
+    renderRouteList();
+    document.getElementById('route-list').scrollIntoView({behavior:'smooth'});
+  },100);
+}
+
+// ── NODE MANAGEMENT ────────────────────────────────────────────────────────
+function renderNodeList(){
+  document.getElementById('node-count').textContent=`(${NODES.length})`;
+  const el=document.getElementById('node-list');el.innerHTML='';
+  NODES.forEach(n=>{
+    const co=n.companyId?COMPANIES.find(c=>c.id===n.companyId):null;
+    const zone=n.zoneId?ZONES.find(z=>z.id===n.zoneId):null;
+    const rt=n.routeId?NAMED_ROUTES.find(r=>r.id===n.routeId):null;
+    const isEd=editingId===n.id;
+    const wrap=document.createElement('div');
+    wrap.innerHTML=`
+<div class="node-item">
+  <div class="node-dot" style="background:${nodeColor(n)}"></div>
+  <div style="flex:1;min-width:0">
+    <div class="node-name">${n.name}</div>
+    <div class="node-addr">${n.address}</div>
+    ${co?`<div class="node-meta" style="color:${co.color||'var(--purple)'}">● ${co.name}</div>`:''}
+    ${zone?`<div class="node-meta" style="color:${zone.color||'var(--gray4)'}">Zone: ${zone.name}</div>`:''}
+    ${rt?`<div class="node-meta">Route: ${rt.name}</div>`:''}
+    ${n.revenue?`<div class="node-meta">$${n.revenue.toLocaleString()} YTD · $${n.avgOrder} avg · ${n.ordersPerMo}x/mo</div>`:''}
+  </div>
+  <div class="node-actions">
+    <button class="btn-sm btn-edit" onclick="startEdit(${n.id})">Edit</button>
+    <button class="btn-sm btn-del" onclick="deleteNode(${n.id})">Remove</button>
+  </div>
+</div>
+${isEd?`<div class="edit-form">
+  <div class="fl"><label>Name</label><input id="en-${n.id}" type="text" value="${n.name}"/></div>
+  <div class="fl"><label>Address</label><input id="ea-${n.id}" type="text" value="${n.address}"/></div>
+  <div class="fl"><label>YTD Revenue</label><input id="er-${n.id}" type="number" value="${n.revenue||''}"/></div>
+  <div class="row2">
+    <div class="fl"><label>Avg order</label><input id="eo-${n.id}" type="number" value="${n.avgOrder||''}"/></div>
+    <div class="fl"><label>Orders/mo</label><input id="ef-${n.id}" type="number" step=".5" value="${n.ordersPerMo||''}"/></div>
+  </div>
+  <div class="fl"><label>Type</label>
+    <div style="display:flex;gap:4px">
+      <label style="display:flex;align-items:center;gap:3px;font-size:11px"><input type="radio" name="et-${n.id}" value="regular" ${n.type==='regular'?'checked':''}/> Regular</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:11px"><input type="radio" name="et-${n.id}" value="anchor" ${n.type==='anchor'?'checked':''}/> Anchor</label>
+      <label style="display:flex;align-items:center;gap:3px;font-size:11px"><input type="radio" name="et-${n.id}" value="multi" ${n.type==='multi'?'checked':''}/> Multi-loc</label>
+    </div></div>
+  <div class="fl"><label>Company</label>
+    <select id="eco-${n.id}"><option value="">None</option>${COMPANIES.map(c=>`<option value="${c.id}" ${n.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+  <div class="fl"><label>Zone</label>
+    <select id="ezo-${n.id}"><option value="">No zone</option>${ZONES.map(z=>`<option value="${z.id}" ${n.zoneId===z.id?'selected':''}>${z.name}</option>`).join('')}</select></div>
+  <div class="fl"><label>Named route</label>
+    <select id="ert-${n.id}"><option value="">No route</option>${NAMED_ROUTES.map(r=>`<option value="${r.id}" ${n.routeId===r.id?'selected':''}>${r.name}</option>`).join('')}</select></div>
+  <div id="es-${n.id}" class="hint"></div>
+  <button class="btn btn-primary" onclick="saveEdit(${n.id})">Save changes</button>
+</div>`:''}`;
+    el.appendChild(wrap);
+  });
+}
+function startEdit(id){editingId=editingId===id?null:id;renderNodeList();}
+function deleteNode(id){
+  if(!confirm('Remove this node?'))return;
+  NODES=NODES.filter(n=>n.id!==id);
+  if(markers[id]){map.removeLayer(markers[id]);delete markers[id];}
+  renderNodeList();populateDropdowns();
+  deleteFromDb('nodes',id);saveState();
+}
+async function saveEdit(id){
+  const n=NODES.find(x=>x.id===id);if(!n)return;
+  const nm=document.getElementById('en-'+id).value.trim();
+  const ad=document.getElementById('ea-'+id).value.trim();
+  if(!nm||!ad)return;
+  const addrChanged=ad!==n.address;const st=document.getElementById('es-'+id);
+  n.name=nm;n.address=ad;
+  n.revenue=parseFloat(document.getElementById('er-'+id).value)||null;
+  n.avgOrder=parseFloat(document.getElementById('eo-'+id).value)||n.avgOrder;
+  n.ordersPerMo=parseFloat(document.getElementById('ef-'+id).value)||n.ordersPerMo;
+  const sel=document.querySelector(`input[name="et-${id}"]:checked`);if(sel)n.type=sel.value;
+  n.companyId=document.getElementById('eco-'+id).value?parseInt(document.getElementById('eco-'+id).value):null;
+  n.zoneId=document.getElementById('ezo-'+id).value?parseInt(document.getElementById('ezo-'+id).value):null;
+  n.routeId=document.getElementById('ert-'+id).value?parseInt(document.getElementById('ert-'+id).value):null;
+  if(addrChanged){
+    st.textContent='Geocoding…';
+    try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(ad)}&limit=1`);const d=await r.json();if(d.length){n.lat=parseFloat(d[0].lat);n.lng=parseFloat(d[0].lon);placeMarker(n);st.textContent='Updated.';}else st.textContent='Address not found.';}
+    catch(e){st.textContent='Geocoding failed.';}
+  }else{placeMarker(n);}
+  editingId=null;renderNodeList();populateDropdowns();saveState();
+}
+
+// ── COMPANIES ──────────────────────────────────────────────────────────────
+function addCompany(){
+  const nm=document.getElementById('co-name').value.trim();if(!nm)return;
+  COMPANIES.push({id:nextCoId++,name:nm,notes:document.getElementById('co-notes').value.trim(),color:selectedCoColor,editColor:selectedCoColor});
+  document.getElementById('co-name').value='';document.getElementById('co-notes').value='';
+  renderCompanyList();populateDropdowns();refreshAllMarkers();saveState();
+}
+function deleteCompany(id){
+  if(!confirm('Delete company? Nodes will be unlinked.'))return;
+  COMPANIES=COMPANIES.filter(c=>c.id!==id);
+  NODES.forEach(n=>{if(n.companyId===id)n.companyId=null;});
+  renderCompanyList();populateDropdowns();refreshAllMarkers();
+  deleteFromDb('companies',id);saveState();
+}
+function updateCompanyColor(coId,color){
+  const co=COMPANIES.find(c=>c.id===coId);if(co){co.color=color;}
+  refreshAllMarkers();renderCompanyList();saveState();
+}
+function renderCompanyList(){
+  const el=document.getElementById('company-list');el.innerHTML='';
+  if(!COMPANIES.length){el.innerHTML='<div class="status-msg" style="padding:10px">No companies yet.</div>';return;}
+  COMPANIES.forEach(co=>{
+    const locs=NODES.filter(n=>n.companyId===co.id);
+    const totalRev=locs.reduce((s,n)=>s+(n.revenue||0),0);
+    const unlinked=NODES.filter(n=>n.companyId!==co.id);
+    const wrap=document.createElement('div');wrap.className='exp-item';
+    wrap.innerHTML=`
+<div class="exp-hdr" onclick="toggleExp('co-body-${co.id}')">
+  <div style="width:14px;height:14px;border-radius:50%;background:${co.color};border:1.5px solid rgba(0,0,0,.15);flex-shrink:0"></div>
+  <span style="font-size:12px;font-weight:600;flex:1">${co.name}</span>
+  <span style="font-size:10px;color:var(--gray4)">${locs.length} loc · $${totalRev.toLocaleString()}</span>
+  <button class="btn-sm btn-del" onclick="event.stopPropagation();deleteCompany(${co.id})">Remove</button>
+</div>
+<div class="exp-body" id="co-body-${co.id}">
+  ${co.notes?`<div style="font-size:11px;color:var(--gray4);margin-bottom:6px">${co.notes}</div>`:''}
+  <div class="fl"><label>Edit name</label><input id="co-edit-name-${co.id}" type="text" value="${co.name}" onblur="COMPANIES.find(c=>c.id===${co.id}).name=this.value;renderCompanyList();populateDropdowns();saveState()"/></div>
+  <div class="fl"><label>Pin color</label>
+    <div class="color-picker" id="co-edit-color-${co.id}"></div></div>
+  <div style="margin:6px 0 4px;font-size:10px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.05em">Linked locations</div>
+  <div style="margin-bottom:6px">${locs.map(n=>`<span class="loc-tag"><div style="width:7px;height:7px;border-radius:50%;background:${co.color}"></div>${n.name}<button onclick="NODES.find(x=>x.id===${n.id}).companyId=null;refreshAllMarkers();renderCompanyList();saveState();">×</button></span>`).join('')||'<span style="font-size:11px;color:var(--gray3)">None linked</span>'}</div>
+  ${unlinked.length?`<div style="display:flex;gap:5px">
+    <select id="link-sel-${co.id}" style="flex:1;font-size:11px">${unlinked.map(n=>`<option value="${n.id}">${n.name}</option>`).join('')}</select>
+    <button class="btn-sm btn-link" onclick="linkNodeToCompany(${co.id})">Link</button>
+  </div>`:''}
+</div>`;
+    el.appendChild(wrap);
+    // build inline color picker
+    const cpEl=document.getElementById(`co-edit-color-${co.id}`);
+    if(cpEl){
+      cpEl.innerHTML=COLORS.map((c,i)=>`<div class="color-swatch${co.color===c?' selected':''}" style="background:${c}" title="${COLOR_NAMES[i]}" onclick="updateCompanyColor(${co.id},'${c}');document.querySelectorAll('#co-edit-color-${co.id} .color-swatch').forEach(s=>s.classList.remove('selected'));saveState();this.classList.add('selected')"></div>`).join('');
+    }
+  });
+}
+function linkNodeToCompany(coId){
+  const sel=document.getElementById('link-sel-'+coId);if(!sel)return;
+  const n=NODES.find(x=>x.id===parseInt(sel.value));
+  if(n){n.companyId=coId;placeMarker(n);}
+  renderCompanyList();saveState();
+}
+function toggleExp(id){document.getElementById(id).classList.toggle('open');}
+
+// ── ZONES & ROUTES ─────────────────────────────────────────────────────────
+function addZone(){
+  const nm=document.getElementById('zone-name').value.trim();if(!nm)return;
+  ZONES.push({id:nextZoneId++,name:nm,desc:document.getElementById('zone-desc').value.trim(),color:selectedZoneColor});
+  document.getElementById('zone-name').value='';document.getElementById('zone-desc').value='';
+  renderZoneList();populateDropdowns();saveState();
+}
+function deleteZone(id){
+  if(!confirm('Delete zone?'))return;
+  ZONES=ZONES.filter(z=>z.id!==id);
+  NODES.forEach(n=>{if(n.zoneId===id)n.zoneId=null;});
+  renderZoneList();populateDropdowns();
+  deleteFromDb('zones',id);saveState();
+}
+function renderZoneList(){
+  const el=document.getElementById('zone-list');el.innerHTML='';
+  if(!ZONES.length){el.innerHTML='<div class="status-msg" style="padding:8px">No zones yet.</div>';return;}
+  ZONES.forEach(z=>{
+    const nodes=NODES.filter(n=>n.zoneId===z.id);
+    const wrap=document.createElement('div');wrap.className='exp-item';
+    wrap.innerHTML=`
+<div class="exp-hdr" onclick="toggleExp('zone-body-${z.id}')">
+  <div style="width:14px;height:14px;border-radius:3px;background:${z.color};flex-shrink:0"></div>
+  <span style="font-size:12px;font-weight:600;flex:1">${z.name}</span>
+  <span style="font-size:10px;color:var(--gray4)">${nodes.length} nodes</span>
+  <button class="btn-sm btn-del" onclick="event.stopPropagation();deleteZone(${z.id})">Remove</button>
+</div>
+<div class="exp-body" id="zone-body-${z.id}">
+  ${z.desc?`<div style="font-size:11px;color:var(--gray4);margin-bottom:6px">${z.desc}</div>`:''}
+  <div style="font-size:10px;font-weight:600;color:var(--gray4);margin-bottom:4px">Nodes in this zone</div>
+  <div style="margin-bottom:6px">${nodes.map(n=>`<span class="loc-tag"><div style="width:7px;height:7px;border-radius:50%;background:${z.color}"></div>${n.name}<button onclick="NODES.find(x=>x.id===${n.id}).zoneId=null;renderZoneList();saveState();">×</button></span>`).join('')||'<span style="font-size:11px;color:var(--gray3)">None assigned</span>'}</div>
+  ${NODES.filter(n=>n.zoneId!==z.id).length?`<div style="display:flex;gap:5px">
+    <select id="zone-link-sel-${z.id}" style="flex:1;font-size:11px">${NODES.filter(n=>n.zoneId!==z.id).map(n=>`<option value="${n.id}">${n.name}</option>`).join('')}</select>
+    <button class="btn-sm btn-link" onclick="linkNodeToZone(${z.id})">Add</button>
+  </div>`:''}
+</div>`;
+    el.appendChild(wrap);
+  });
+}
+function linkNodeToZone(zId){
+  const sel=document.getElementById('zone-link-sel-'+zId);if(!sel)return;
+  const n=NODES.find(x=>x.id===parseInt(sel.value));
+  if(n){n.zoneId=zId;placeMarker(n);}
+  renderZoneList();saveState();
+}
+function addNamedRoute(){
+  const nm=document.getElementById('rt-name').value.trim();if(!nm)return;
+  const day=parseInt(document.getElementById('rt-day').value);
+  const zoneId=document.getElementById('rt-zone').value?parseInt(document.getElementById('rt-zone').value):null;
+  const rtColors=['#1E88E5','#43A047','#FB8C00','#E53935','#8E24AA','#00ACC1','#F4511E','#7CB342'];
+  const rtColor=rtColors[(nextNrId-1)%rtColors.length];
+  NAMED_ROUTES.push({id:nextNrId++,name:nm,day,zoneId,color:rtColor,visible:false,nodeIds:[]});
+  document.getElementById('rt-name').value='';
+  renderNamedRouteList();populateDropdowns();saveState();
+}
+function deleteNamedRoute(id){
+  if(!confirm('Delete this route?'))return;
+  clearNamedRouteFromMap(id);
+  NAMED_ROUTES=NAMED_ROUTES.filter(r=>r.id!==id);
+  NODES.forEach(n=>{if(n.routeId===id)n.routeId=null;});
+  renderNamedRouteList();populateDropdowns();
+  deleteFromDb('named_routes',id);saveState();
+}
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function getRouteNodes(rt){
+  // Support both old routeId-based and new nodeIds-based assignment
+  if(rt.nodeIds&&rt.nodeIds.length) return NODES.filter(n=>rt.nodeIds.includes(n.id));
+  return NODES.filter(n=>n.routeId===rt.id);
+}
+
+function toggleRouteVisibility(rtId){
+  const rt=NAMED_ROUTES.find(r=>r.id===rtId);if(!rt)return;
+  rt.visible=!rt.visible;
+  if(rt.visible) drawNamedRouteOnMap(rt);
+  else clearNamedRouteFromMap(rtId);
+  saveState();
+  renderNamedRouteList();
+}
+
+function drawNamedRouteOnMap(rt){
+  clearNamedRouteFromMap(rt.id);
+  const nodes=getRouteNodes(rt);
+  if(!nodes.length)return;
+  const layer=L.layerGroup();
+  const pts=[[ROASTERY.lat,ROASTERY.lng],...nodes.map(n=>[n.lat,n.lng]),[ROASTERY.lat,ROASTERY.lng]];
+  L.polyline(pts,{color:rt.color||'#1E88E5',weight:3,opacity:.85}).addTo(layer);
+  nodes.forEach((n,i)=>{
+    L.circleMarker([n.lat,n.lng],{radius:9,fillColor:rt.color||'#1E88E5',fillOpacity:.9,color:'#fff',weight:2})
+      .addTo(layer).bindPopup(`<b style="color:${rt.color}">${rt.name}</b><br><b>${i+1}. ${n.name}</b><br><span style="font-size:11px;color:#888">${n.address}</span><br><span style="font-size:11px">Avg order: $${n.avgOrder||'—'}</span>`);
+  });
+  layer.addTo(map);
+  routeLayers[rt.id]=layer;
+  map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});
+}
+
+function clearNamedRouteFromMap(rtId){
+  if(routeLayers[rtId]){map.removeLayer(routeLayers[rtId]);delete routeLayers[rtId];}
+}
+
+function routeViability(rt){
+  const nodes=getRouteNodes(rt);
+  if(!nodes.length)return null;
+  const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+  const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+  const viabPct=(parseFloat(document.getElementById('viability-pct').value)||8)/100;
+  // Estimate total distance: roastery → each node in order → roastery
+  const pts=[ROASTERY,...nodes,ROASTERY];
+  let totalMi=0;
+  for(let i=0;i<pts.length-1;i++) totalMi+=haversine(pts[i].lat,pts[i].lng,pts[i+1].lat,pts[i+1].lng);
+  const estMinutes=Math.round((totalMi/28)*60);
+  const driverCost=(estMinutes/60)*drRate;
+  const mileCost=totalMi*miRate;
+  const totalCost=driverCost+mileCost;
+  const perStop=totalCost/nodes.length;
+  const totalOrderVal=nodes.reduce((s,n)=>s+(n.avgOrder||150),0);
+  const totalShipEst=nodes.reduce((s,n)=>s+upsRate(estLbs(n.avgOrder||150)),0);
+  const costPct=totalCost/totalOrderVal;
+  const viable=costPct<viabPct;
+  const shipWins=totalShipEst<totalCost;
+  return{totalMi,estMinutes,totalCost,perStop,totalOrderVal,totalShipEst,costPct,viable,shipWins,nodeCount:nodes.length};
+}
+
+function renderNamedRouteList(){
+  const el=document.getElementById('named-route-list');el.innerHTML='';
+  if(!NAMED_ROUTES.length){el.innerHTML='<div class="status-msg" style="padding:8px">No named routes yet.</div>';return;}
+  NAMED_ROUTES.forEach(rt=>{
+    const nodes=getRouteNodes(rt);
+    const zone=rt.zoneId?ZONES.find(z=>z.id===rt.zoneId):null;
+    const v=routeViability(rt);
+    const wrap=document.createElement('div');wrap.className='exp-item';
+    const toggleLabel=rt.visible?'Hide on map':'Show on map';
+    const toggleStyle=rt.visible?
+      `background:${rt.color||'#1E88E5'};color:#fff;border:none`:
+      `background:#fff;color:${rt.color||'#1E88E5'};border:2px solid ${rt.color||'#1E88E5'}`;
+    const viabBadge=v?(v.viable&&!v.shipWins?
+      `<span style="font-size:10px;font-weight:600;background:var(--green-lt);color:var(--green);padding:2px 7px;border-radius:8px">✓ Viable</span>`:
+      v.shipWins?`<span style="font-size:10px;font-weight:600;background:var(--red-lt);color:var(--red);padding:2px 7px;border-radius:8px">Ship cheaper</span>`:
+      `<span style="font-size:10px;font-weight:600;background:var(--orange-lt);color:var(--orange);padding:2px 7px;border-radius:8px">⚠ Review</span>`):'';
+    wrap.innerHTML=`
+<div style="display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--gray0);cursor:pointer" onclick="toggleExp('rt-body-${rt.id}')">
+  <div style="width:12px;height:12px;border-radius:50%;background:${rt.color||'#1E88E5'};flex-shrink:0;border:1.5px solid rgba(0,0,0,.15)"></div>
+  <span style="font-size:12px;font-weight:600;flex:1">${rt.name}</span>
+  ${viabBadge}
+  <span style="font-size:10px;color:var(--gray4)">${DAYS[rt.day]} · ${nodes.length} stops</span>
+  <button class="btn-sm" style="${toggleStyle};border-radius:5px;padding:3px 9px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit" onclick="event.stopPropagation();toggleRouteVisibility(${rt.id})">${toggleLabel}</button>
+  <button class="btn-sm btn-del" onclick="event.stopPropagation();deleteNamedRoute(${rt.id})">✕</button>
+</div>
+<div class="exp-body" id="rt-body-${rt.id}">
+  ${v?`<div style="background:#fff;padding:8px 10px;border-bottom:1px solid var(--gray1)">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:7px">
+      <div style="background:var(--gray0);border-radius:5px;padding:5px 7px"><div style="font-size:9px;color:var(--gray4);font-weight:500">Distance</div><div style="font-size:13px;font-weight:600">${v.totalMi.toFixed(0)} mi</div></div>
+      <div style="background:var(--gray0);border-radius:5px;padding:5px 7px"><div style="font-size:9px;color:var(--gray4);font-weight:500">Est. time</div><div style="font-size:13px;font-weight:600">${v.estMinutes} min</div></div>
+      <div style="background:var(--gray0);border-radius:5px;padding:5px 7px"><div style="font-size:9px;color:var(--gray4);font-weight:500">Route cost</div><div style="font-size:13px;font-weight:600;color:${v.viable?'var(--green)':'var(--red)'}">$${v.totalCost.toFixed(0)}</div></div>
+      <div style="background:var(--gray0);border-radius:5px;padding:5px 7px"><div style="font-size:9px;color:var(--gray4);font-weight:500">Cost/stop</div><div style="font-size:13px;font-weight:600">$${v.perStop.toFixed(0)}</div></div>
+    </div>
+    <div style="font-size:11px;color:var(--gray5);background:var(--gold-lt);border-left:3px solid var(--gold);padding:5px 8px;border-radius:0 5px 5px 0;margin-bottom:6px">
+      ${v.viable&&!v.shipWins?`Deliver saves <b>$${(v.totalShipEst-v.totalCost).toFixed(0)}</b> vs. shipping all ${v.nodeCount} stops individually.`:
+        v.shipWins?`Shipping each order individually would cost <b>$${v.totalShipEst.toFixed(0)}</b> vs. <b>$${v.totalCost.toFixed(0)}</b> to deliver — shipping wins by $${(v.totalCost-v.totalShipEst).toFixed(0)}. Route viability improves as more stops order on the same day.`:
+        `Delivery cost is ${(v.costPct*100).toFixed(1)}% of order revenue — above the ${(parseFloat(document.getElementById('viability-pct').value)||8)}% threshold. Add higher-value stops or confirm more accounts order on this day.`}
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" style="background:${rt.color||'#1E88E5'};color:#fff;border:none;border-radius:5px;flex:1;padding:5px;cursor:pointer;font-family:inherit;font-weight:500" onclick="event.stopPropagation();toggleRouteVisibility(${rt.id})">${rt.visible?'Hide on map':'Show on map'}</button>
+      <button class="btn-sm" style="background:var(--navy);color:#fff;border:none;border-radius:5px;flex:1;padding:5px;cursor:pointer;font-family:inherit" onclick="loadRouteIntoPlanner(${rt.id})">Open in Planner</button>
+    </div>
+  </div>`:''}
+  <div style="padding:8px 10px">
+    <div style="font-size:10px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Stops on this route</div>
+    <div style="margin-bottom:6px">${nodes.map((n,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid var(--gray1);font-size:11px"><span style="width:16px;height:16px;border-radius:50%;background:${rt.color||'#1E88E5'};color:#fff;font-size:9px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span><span style="flex:1;font-weight:500">${n.name}</span><span style="color:var(--gray4)">$${n.avgOrder||'—'} avg</span></div>`).join('')||'<span style="font-size:11px;color:var(--gray3)">None assigned</span>'}</div>
+    <div style="display:flex;gap:5px">
+      <select id="rt-link-sel-${rt.id}" style="flex:1;font-size:11px">${NODES.filter(n=>!getRouteNodes(rt).find(x=>x.id===n.id)).map(n=>`<option value="${n.id}">${n.name}</option>`).join('')}</select>
+      <button class="btn-sm btn-link" onclick="addNodeToNamedRoute(${rt.id})">Add stop</button>
+    </div>
+  </div>
+</div>`;
+    el.appendChild(wrap);
+  });
+}
+function linkNodeToRoute(rtId){
+  const sel=document.getElementById('rt-link-sel-'+rtId);if(!sel)return;
+  const n=NODES.find(x=>x.id===parseInt(sel.value));
+  if(n){n.routeId=rtId;}
+  renderNamedRouteList();populateDropdowns();saveState();
+}
+function addNodeToNamedRoute(rtId){
+  const sel=document.getElementById('rt-link-sel-'+rtId);if(!sel)return;
+  const nId=parseInt(sel.value);
+  const rt=NAMED_ROUTES.find(r=>r.id===rtId);if(!rt)return;
+  if(!rt.nodeIds)rt.nodeIds=[];
+  if(!rt.nodeIds.includes(nId))rt.nodeIds.push(nId);
+  if(rt.visible){clearNamedRouteFromMap(rtId);drawNamedRouteOnMap(rt);}
+  renderNamedRouteList();saveState();
+}
+function loadRouteIntoPlanner(rtId){
+  plannerStops=NODES.filter(n=>n.routeId===rtId).map(n=>({...n}));
+  const rt=NAMED_ROUTES.find(r=>r.id===rtId);
+  if(rt){document.getElementById('pl-name').value=rt.name;document.getElementById('pl-day').value=rt.day;}
+  switchTab('planner');
+  renderPlannerStops();drawPlannerOnMap();
+}
+
+// ── ADD NODE ───────────────────────────────────────────────────────────────
+async function addNode(){
+  const nm=document.getElementById('new-name').value.trim();
+  const street=document.getElementById('new-addr').value.trim();
+  const suite=document.getElementById('new-suite').value.trim();
+  const city=document.getElementById('new-city').value.trim();
+  const state=document.getElementById('new-state').value.trim()||'GA';
+  const zip=document.getElementById('new-zip').value.trim();
+  if(!nm||!street||!city){document.getElementById('add-status').textContent='Name, street address, and city are required.';return;}
+  const streetFull=suite?`${street}, ${suite}`:street;
+  const ad=[streetFull,city,zip?`${state} ${zip}`:state].filter(Boolean).join(', ');
+  const st=document.getElementById('add-status');st.textContent='Geocoding…';
+  let lat=null,lng=null;
+  try{
+    // Structured search: street + city + state separately — most reliable for Nominatim
+    const structuredUrl=`https://nominatim.openstreetmap.org/search?format=json&street=${encodeURIComponent(streetFull)}&city=${encodeURIComponent(city)}&state=${encodeURIComponent(state||'Georgia')}&postalcode=${encodeURIComponent(zip)}&country=US&limit=1`;
+    let r=await fetch(structuredUrl);
+    let d=await r.json();
+    if(!d.length){
+      // Fall back: free-form with full address string
+      r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(ad+', USA')}&limit=1&countrycodes=us`);
+      d=await r.json();
+    }
+    if(!d.length){
+      // Last attempt: just city + state in case street number is the issue
+      r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city+', Georgia, USA')}&limit=1&countrycodes=us`);
+      d=await r.json();
+      if(d.length)st.textContent='Street not found — pinned to city center. Drag the pin or correct the address.';
+    }
+    if(!d.length){st.textContent='Could not locate this address. Double-check the street number and city.';return;}
+    lat=parseFloat(d[0].lat);lng=parseFloat(d[0].lon);
+  }
+  catch(e){st.textContent='Geocoding failed — check your connection.';return;}
+  const n={id:nextId++,name:nm,address:ad,lat,lng,
+    revenue:parseFloat(document.getElementById('new-rev').value)||null,
+    avgOrder:parseFloat(document.getElementById('new-avg').value)||300,
+    ordersPerMo:parseFloat(document.getElementById('new-freq').value)||2,
+    type:newType,
+    companyId:document.getElementById('new-company').value?parseInt(document.getElementById('new-company').value):null,
+    zoneId:document.getElementById('new-zone').value?parseInt(document.getElementById('new-zone').value):null,
+    routeId:document.getElementById('new-route').value?parseInt(document.getElementById('new-route').value):null,
+  };
+  NODES.push(n);placeMarker(n);map.setView([lat,lng],13);
+  renderNodeList();populateDropdowns();saveState();
+  st.textContent=`${nm} added.`;
+  ['new-name','new-addr','new-suite','new-city','new-zip','new-rev','new-avg','new-freq'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('new-state').value='GA';
+}
+
+// ── STOP BUILDER ───────────────────────────────────────────────────────────
+function addStopFromCompany(){
+  stopEntries.push({mode:'company',companyId:COMPANIES[0]?.id||null,name:'',address:'',order:''});
+  renderStopEntries();
+}
+function addStopEntry(mode){
+  stopEntries.push({mode:mode||'new',companyId:null,name:'',street:'',suite:'',city:'',state:'GA',zip:'',order:''});
+  renderStopEntries();
+}
+function removeStopEntry(idx){stopEntries.splice(idx,1);renderStopEntries();}
+
+function renderStopEntries(){
+  const el=document.getElementById('stop-entries');
+  if(!stopEntries.length){
+    el.innerHTML='<div style="padding:14px 10px;font-size:11px;color:var(--gray3);text-align:center;border:1px dashed var(--gray2);border-radius:7px;line-height:1.6">No stops added yet.<br>Use <b>+ Existing customer</b> to pick from your company list<br>or <b>+ New location</b> to enter manually.</div>';
+    return;
+  }
+  el.innerHTML=stopEntries.map((s,idx)=>{
+    const co=s.mode==='company'?COMPANIES.find(c=>c.id===s.companyId):null;
+    const coNode=co?NODES.find(n=>n.companyId===co.id):null;
+    const dotColor=co?.color||'var(--gray3)';
+    const label=co?.name||(s.name||'New location');
+    return`<div style="background:#fff;border:1px solid var(--gray2);border-radius:8px;overflow:hidden;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--gray0);border-bottom:1px solid var(--gray1)">
+        <div style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${dotColor};flex-shrink:0;border:1.5px solid rgba(0,0,0,.12)"></div>
+        <span style="font-size:12px;font-weight:600;flex:1;color:var(--text)">${label}</span>
+        <button class="btn-sm btn-del" onclick="removeStopEntry(${idx})">✕</button>
+      </div>
+      <div style="padding:9px 10px">
+        ${s.mode==='company'?`
+        <div class="fl" style="margin-bottom:8px">
+          <label>Account / Company</label>
+          <select onchange="(function(sel){
+            const id=parseInt(sel.value);
+            stopEntries[${idx}].companyId=id;
+            const co=COMPANIES.find(c=>c.id===id);
+            if(co){stopEntries[${idx}].name=co.name;
+              const n=NODES.find(x=>x.companyId===id);
+              if(n){stopEntries[${idx}].address=n.address;}
+            }
+            renderStopEntries();
+          })(this)" style="background:#fff">
+            ${COMPANIES.map(c=>`<option value="${c.id}" ${s.companyId===c.id?'selected':''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+        ${coNode?`<div style="font-size:10px;color:var(--gray4);background:var(--gray0);padding:5px 8px;border-radius:5px;margin-bottom:8px">${coNode.address}</div>`:''}
+        `:`
+        <div class="fl" style="margin-bottom:6px"><label>Business name *</label>
+          <input type="text" placeholder="e.g. New Café" value="${s.name||''}" oninput="stopEntries[${idx}].name=this.value" style="background:#fff"/></div>
+        <div class="fl" style="margin-bottom:6px"><label>Street address</label>
+          <input type="text" placeholder="e.g. 240 Chambers St" value="${s.street||s.address||''}" oninput="stopEntries[${idx}].street=this.value" style="background:#fff"/></div>
+        <div class="fl" style="margin-bottom:6px"><label>Suite / Unit</label>
+          <input type="text" placeholder="Suite 100 (optional)" value="${s.suite||''}" oninput="stopEntries[${idx}].suite=this.value" style="background:#fff"/></div>
+        <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:5px;margin-bottom:0">
+          <div class="fl" style="margin-bottom:0"><label>City</label>
+            <input type="text" placeholder="Woodstock" value="${s.city||''}" oninput="stopEntries[${idx}].city=this.value" style="background:#fff"/></div>
+          <div class="fl" style="margin-bottom:0"><label>State</label>
+            <input type="text" placeholder="GA" value="${s.state||'GA'}" oninput="stopEntries[${idx}].state=this.value" style="background:#fff"/></div>
+          <div class="fl" style="margin-bottom:0"><label>ZIP</label>
+            <input type="text" placeholder="30188" value="${s.zip||''}" oninput="stopEntries[${idx}].zip=this.value" style="background:#fff"/></div>
+        </div>
+        `}
+        <div class="fl" style="margin-top:7px;margin-bottom:0">
+          <label>Order number <span style="color:var(--gray3);font-weight:400">(optional)</span></label>
+          <input type="text" placeholder="#129010" value="${s.order||''}" oninput="stopEntries[${idx}].order=this.value" style="background:#fff"/>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── ROUTE LOG ──────────────────────────────────────────────────────────────
+function logRoute(){
+  const date=document.getElementById('rl-date').value;
+  const dep=document.getElementById('rl-dep').value;
+  const ret=document.getElementById('rl-ret').value;
+  const miles=parseFloat(document.getElementById('rl-miles').value);
+  const driver=document.getElementById('rl-driver').value.trim();
+  if(!date||!dep||!ret||!miles||!stopEntries.length){document.getElementById('rl-status').textContent='Date, times, mileage, and at least one stop are required.';return;}
+  const anchorVal=document.getElementById('rl-anchor').value;
+  const stops=stopEntries.map(s=>{
+    if(s.mode==='company'){
+      const co=COMPANIES.find(c=>c.id===s.companyId);
+      const n=NODES.find(x=>x.companyId===s.companyId);
+      return{name:co?.name||'Unknown',address:n?.address||'',order:s.order||'',actualUps:null};
+    }
+    const streetFull=s.suite?`${s.street||s.address||''}, ${s.suite}`:(s.street||s.address||'');
+    const cityPart=[s.city,s.zip?`${s.state||'GA'} ${s.zip}`:(s.state||'GA')].filter(Boolean).join(', ');
+    const fullAddr=[streetFull,cityPart].filter(Boolean).join(', ');
+    return{name:s.name||'Unknown',address:fullAddr,order:s.order||'',actualUps:null};
+  });
+  ROUTES.unshift({id:'r'+Date.now(),date,driver,dep,ret,miles,anchorId:anchorVal?parseInt(anchorVal):null,stops,notes:document.getElementById('rl-notes').value.trim()});
+  stopEntries=[];renderStopEntries();
+  document.getElementById('rl-date').value='';document.getElementById('rl-driver').value='';document.getElementById('rl-notes').value='';
+  document.getElementById('rl-status').textContent=`Route for ${date} saved.`;
+  renderRouteList();renderSvdSummary();saveState();
+}
+function calcRouteCost(r){
+  const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+  const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+  const [dh,dm]=r.dep.split(':').map(Number);const [rh,rm]=r.ret.split(':').map(Number);
+  const mins=(rh*60+rm)-(dh*60+dm);
+  return{total:(mins/60)*drRate+r.miles*miRate,mins};
+}
+function saveUps(routeId,stopIdx){
+  const inp=document.getElementById(`ups-${routeId}-${stopIdx}`);const val=parseFloat(inp.value);
+  const r=ROUTES.find(x=>x.id===routeId);
+  if(r&&!isNaN(val)&&val>=0){r.stops[stopIdx].actualUps=val;renderRouteList();renderSvdSummary();saveState();}
+}
+function saveStopEdit(routeId,stopIdx){
+  const r=ROUTES.find(x=>x.id===routeId);if(!r)return;
+  const nm=document.getElementById(`sn-${routeId}-${stopIdx}`)?.value.trim();
+  const ad=document.getElementById(`sa-${routeId}-${stopIdx}`)?.value.trim();
+  const or=document.getElementById(`so-${routeId}-${stopIdx}`)?.value.trim();
+  if(nm!==undefined)r.stops[stopIdx].name=nm;if(ad!==undefined)r.stops[stopIdx].address=ad;if(or!==undefined)r.stops[stopIdx].order=or;
+  saveState();
+}
+function renderRouteList(){
+  document.getElementById('route-count').textContent=`(${ROUTES.length})`;
+  const el=document.getElementById('route-list');el.innerHTML='';
+  if(!ROUTES.length){el.innerHTML='<div class="status-msg" style="padding:10px">No routes logged yet.</div>';return;}
+  const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+  const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+  ROUTES.forEach(r=>{
+    const cost=calcRouteCost(r);const perStop=r.stops.length>0?cost.total/r.stops.length:0;
+    const anchor=r.anchorId?NODES.find(n=>n.id===r.anchorId):null;
+    const hasActual=r.stops.some(s=>s.actualUps!==null);const isOpen=selectedRouteId===r.id;
+    const fromPlan=r.fromPlanner;
+    const wrap=document.createElement('div');wrap.className='route-log-item';
+    wrap.innerHTML=`
+<div class="route-log-hdr" onclick="toggleRouteLog('${r.id}')">
+  <span style="font-size:12px;font-weight:600;color:var(--text)">${r.date||'(date not set)'}</span>
+  <span style="font-size:10px;color:var(--gray4);flex:1;margin-left:6px">${r.driver?r.driver+' · ':''}${r.stops.length} stops · ${r.miles||'—'} mi${anchor?' · via '+anchor.name.split(' ')[0]:''}${fromPlan?' · from planner':''}</span>
+  <span style="font-size:12px;font-weight:600;color:var(--green)">${hasActual?'✓ ':''}${r.miles?'$'+cost.total.toFixed(2):'—'}</span>
+</div>
+<div class="route-body ${isOpen?'open':''}">
+  ${fromPlan?`<div style="padding:6px 10px;background:#FFF3E0;border-bottom:1px solid #ffe0b2;font-size:10px;color:var(--orange)">Converted from Route Planner — fill in date, driver, and mileage to complete this log entry.</div>`:''}
+  <div style="padding:5px 10px;background:var(--gray0);border-bottom:1px solid var(--gray2)">
+    <div class="row2" style="gap:5px;margin-bottom:4px">
+      <div class="fl" style="margin-bottom:0"><label>Date</label><input type="date" value="${r.date}" onchange="ROUTES.find(x=>x.id==='${r.id}').date=this.value;renderRouteList();saveState()"/></div>
+      <div class="fl" style="margin-bottom:0"><label>Driver</label><input type="text" value="${r.driver}" placeholder="Driver name" onblur="ROUTES.find(x=>x.id==='${r.id}').driver=this.value"/></div>
+    </div>
+    <div class="row2" style="gap:5px">
+      <div class="fl" style="margin-bottom:0"><label>Departed</label><input type="time" value="${r.dep}" onchange="ROUTES.find(x=>x.id==='${r.id}').dep=this.value;renderRouteList();saveState()"/></div>
+      <div class="fl" style="margin-bottom:0"><label>Returned</label><input type="time" value="${r.ret}" onchange="ROUTES.find(x=>x.id==='${r.id}').ret=this.value;renderRouteList();saveState()"/></div>
+    </div>
+    <div class="fl" style="margin-top:4px;margin-bottom:0"><label>Mileage</label><input type="number" value="${r.miles||''}" placeholder="Odometer miles" onblur="ROUTES.find(x=>x.id==='${r.id}').miles=parseFloat(this.value)||0;renderRouteList();saveState()"/></div>
+    <div style="margin-top:5px;font-size:10px;color:var(--gray4)">Total: ${r.miles?'$'+cost.total.toFixed(2)+' · Per stop: $'+perStop.toFixed(2)+' · '+cost.mins+' min':'(enter mileage and times above)'}</div>
+    <button class="btn-sm btn-ghost" onclick="toggleRouteMapLog('${r.id}')" style="margin-top:5px;font-size:10px">Show on map</button>
+  </div>
+  ${r.stops.map((s,i)=>{
+    const estUps=upsRate(estLbs(NODES.find(n=>n.name.toLowerCase()===s.name.toLowerCase())?.avgOrder||300));
+    const nodeRef=NODES.find(n=>n.name.toLowerCase()===s.name.toLowerCase());
+    const cafeMi=nodeRef?haversine(ROASTERY.lat,ROASTERY.lng,nodeRef.lat,nodeRef.lng)*2:0;
+    const cafeCost=cafeMi*miRate+((cafeMi/28)/2*60/60)*drRate;
+    return`<div class="stop-row">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <div style="width:20px;height:20px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+        <div style="flex:1">
+          <input id="sn-${r.id}-${i}" type="text" value="${s.name}" style="font-weight:500;margin-bottom:2px" onblur="saveStopEdit('${r.id}',${i})"/>
+          <input id="sa-${r.id}-${i}" type="text" value="${s.address}" style="font-size:11px;color:var(--gray4)" onblur="saveStopEdit('${r.id}',${i})"/>
+        </div>
+      </div>
+      <div style="margin-bottom:4px"><input id="so-${r.id}-${i}" type="text" value="${s.order}" placeholder="Order number" style="font-size:11px" onblur="saveStopEdit('${r.id}',${i})"/></div>
+      <div class="stop-costs">
+        <div class="stop-cost-cell"><div class="stop-cost-lbl">Deliver/stop</div><div class="stop-cost-val">${r.miles?'$'+perStop.toFixed(2):'—'}</div></div>
+        <div class="stop-cost-cell"><div class="stop-cost-lbl">Standalone Café</div><div class="stop-cost-val est">~$${cafeCost.toFixed(2)}</div></div>
+        <div class="stop-cost-cell"><div class="stop-cost-lbl">UPS ${s.actualUps!==null?'(actual)':'(est)'}</div><div class="stop-cost-val ${s.actualUps!==null?'actual':'est'}">$${s.actualUps!==null?s.actualUps.toFixed(2):estUps.toFixed(2)}</div></div>
+      </div>
+      <div class="stop-ups-input">
+        <label>Actual UPS ($):</label>
+        <input type="number" id="ups-${r.id}-${i}" placeholder="${s.actualUps!==null?s.actualUps:'enter after lookup'}" value="${s.actualUps!==null?s.actualUps:''}" min="0" step="0.01"/>
+        <button onclick="saveUps('${r.id}',${i})">Save</button>
+      </div>
+    </div>`;
+  }).join('')}
+  ${r.notes?`<div style="padding:6px 10px;font-size:11px;color:var(--gray4);border-top:1px solid var(--gray1)">${r.notes}</div>`:''}
+</div>`;
+    el.appendChild(wrap);
+  });
+}
+function toggleRouteLog(id){selectedRouteId=selectedRouteId===id?null:id;renderRouteList();}
+function toggleRouteMapLog(id){
+  if(routeMapLayer)map.removeLayer(routeMapLayer);
+  const r=ROUTES.find(x=>x.id===id);if(!r)return;
+  routeMapLayer=L.layerGroup();
+  const pts=[[ROASTERY.lat,ROASTERY.lng]];
+  r.stops.forEach(s=>{const n=NODES.find(x=>x.name.toLowerCase()===s.name.toLowerCase());if(n)pts.push([n.lat,n.lng]);});
+  pts.push([ROASTERY.lat,ROASTERY.lng]);
+  L.polyline(pts,{color:COLORS[3],weight:3,opacity:.8}).addTo(routeMapLayer);
+  pts.slice(1,-1).forEach((pt,i)=>{L.circleMarker(pt,{radius:7,fillColor:COLORS[3],fillOpacity:1,color:'#fff',weight:2}).addTo(routeMapLayer).bindPopup(r.stops[i].name);});
+  routeMapLayer.addTo(map);
+  if(pts.length>2)map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});
+}
+function renderSvdSummary(){
+  const el=document.getElementById('svd-summary');
+  if(!ROUTES.length){el.innerHTML='<div class="status-msg" style="padding:10px">Log routes to build historical comparisons.</div>';return;}
+  let totalDeliver=0,totalShipActual=0,totalShipEst=0,actualShipCount=0,estShipCount=0;
+  const nodeMap={};
+  ROUTES.forEach(r=>{
+    if(!r.miles)return;
+    const cost=calcRouteCost(r);totalDeliver+=cost.total;
+    r.stops.forEach(s=>{
+      const perStop=cost.total/r.stops.length;
+      const n=NODES.find(x=>x.name.toLowerCase()===s.name.toLowerCase());
+      const estUps=upsRate(estLbs(n?.avgOrder||300));
+      if(!nodeMap[s.name])nodeMap[s.name]={deliverTotal:0,shipActualTotal:0,shipEstTotal:0,count:0,actualCount:0};
+      nodeMap[s.name].deliverTotal+=perStop;nodeMap[s.name].count++;
+      if(s.actualUps!==null){nodeMap[s.name].shipActualTotal+=s.actualUps;nodeMap[s.name].actualCount++;totalShipActual+=s.actualUps;actualShipCount++;}
+      else{nodeMap[s.name].shipEstTotal+=estUps;totalShipEst+=estUps;estShipCount++;}
+    });
+  });
+  const totalShip=totalShipActual+totalShipEst;const delta=totalShip-totalDeliver;
+  el.innerHTML=`
+<div style="padding:8px 10px">
+  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
+    <span class="actual-badge">${actualShipCount} actual UPS costs</span>
+    <span class="est-badge">${estShipCount} estimated</span>
+  </div>
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-lbl">Total deliver cost</div><div class="metric-val">$${totalDeliver.toFixed(2)}</div><div class="metric-sub">${ROUTES.filter(r=>r.miles).length} routes</div></div>
+    <div class="metric"><div class="metric-lbl">Ship cost (actual+est.)</div><div class="metric-val">$${totalShip.toFixed(2)}</div><div class="metric-sub">${actualShipCount} actual · ${estShipCount} est.</div></div>
+  </div>
+  <div class="insight" style="margin-bottom:8px"><b>${delta>0?'Self-delivery':'Shipping'} saved $${Math.abs(delta).toFixed(2)}</b> across ${ROUTES.filter(r=>r.miles).length} logged routes.</div>
+  <div style="font-size:10px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Per-stop breakdown</div>
+  ${Object.entries(nodeMap).map(([name,d])=>{
+    const avgD=d.deliverTotal/d.count;const shipUsed=d.actualCount>0?(d.shipActualTotal/d.actualCount):(d.shipEstTotal/Math.max(1,d.count-d.actualCount));const win=avgD<shipUsed?'deliver':'ship';
+    return`<div class="svd-row"><div><div class="svd-label">${name}</div><div style="font-size:9px;color:var(--gray3)">${d.count} delivery${d.count>1?'s':''} · ${d.actualCount>0?d.actualCount+' actual UPS':'est.'}</div></div><div style="text-align:right;font-size:11px"><span class="${win==='deliver'?'svd-win':'svd-lose'}">Del $${avgD.toFixed(2)}</span> · <span class="${win==='ship'?'svd-win':'svd-lose'}">${d.actualCount>0?'':'~'}Ship $${shipUsed.toFixed(2)}</span></div></div>`;
+  }).join('')}
+</div>`;
+}
+
+// ── App initialisation (called after Supabase loads) ──────────────────────
+function initApp(){
+  NODES.forEach(placeMarker);
+  populateDropdowns();
+  buildColorPicker('co-color-picker',selectedCoColor,selectCoColor);
+  buildColorPicker('zone-color-picker',selectedZoneColor,selectZoneColor);
+  renderStopEntries();
+  renderNodeList();
+  renderCompanyList();
+  renderZoneList();
+  renderNamedRouteList();
+  renderRouteList();
+  renderSvdSummary();
+}
+
+// Kick off — load from Supabase, then initApp()
+loadFromSupabase();
+</script>
+</body>
+</html>
