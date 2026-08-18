@@ -873,24 +873,47 @@ async function runPlanner(){
   const viabPct=(parseFloat(document.getElementById('viability-pct').value)||8)/100;
   const orderVal=parseFloat(document.getElementById('pl-order-val').value)||350;
   const el=document.getElementById('planner-result');
-  el.innerHTML='<div class="status-msg"><span class="spin">◌</span> Calculating multi-stop route…</div>';
+  el.innerHTML='<div class="status-msg"><span class="spin">◌</span> Calculating route legs…</div>';
 
-  const coords=[[ROASTERY.lng,ROASTERY.lat],...plannerStops.map(n=>[n.lng,n.lat]),[ROASTERY.lng,ROASTERY.lat]];
-  const orsResult=await getOrsMulti(coords);
-  
-  let totalMi=0,totalMin=0;
-  if(orsResult){totalMi=orsResult.distMi;totalMin=orsResult.durationMin;}
-  else{
-    // fallback: sum legs
-    const pts=[ROASTERY,...plannerStops,ROASTERY];
-    for(let i=0;i<pts.length-1;i++){totalMi+=haversine(pts[i].lat,pts[i].lng,pts[i+1].lat,pts[i+1].lng);}
-    totalMin=Math.round(totalMi/28*60);
+  // Build waypoint sequence: roastery → stop1 → stop2 … → roastery
+  const allPts=[ROASTERY,...plannerStops,ROASTERY];
+
+  // Fetch each leg in parallel: roastery→s1, s1→s2, ..., sN→roastery
+  const legRequests=[];
+  for(let i=0;i<allPts.length-1;i++){
+    legRequests.push(getOrs(allPts[i].lat,allPts[i].lng,allPts[i+1].lat,allPts[i+1].lng));
   }
+  const legResults=await Promise.all(legRequests);
 
-  const driverCost=(totalMin/60)*drRate;
-  const mileCost=totalMi*miRate;
-  const totalDeliverCost=driverCost+mileCost;
-  const perStop=plannerStops.length>0?totalDeliverCost/plannerStops.length:0;
+  // Build per-stop marginal costs from each leg (stop gets the cost of the leg TO it)
+  // Leg 0 = roastery→stop1, Leg 1 = stop1→stop2, ... Leg N = stopN→roastery (return)
+  // Return leg is shared overhead — split it equally across all stops
+  const useOrs=legResults.some(r=>r!==null);
+  const legData=allPts.slice(0,-1).map((_,i)=>{
+    if(legResults[i]) return {mi:legResults[i].distMi, min:legResults[i].durationMin};
+    // fallback straight-line
+    const mi=haversine(allPts[i].lat,allPts[i].lng,allPts[i+1].lat,allPts[i+1].lng);
+    return {mi, min:Math.round(mi/28*60)};
+  });
+
+  const returnLeg=legData[legData.length-1]; // last leg = return to roastery
+  const returnCost=(returnLeg.min/60)*drRate + returnLeg.mi*miRate;
+  const returnCostPerStop=returnCost/plannerStops.length;
+
+  // Per-stop marginal cost = cost of leg TO that stop + share of return leg
+  const stopCosts=plannerStops.map((_,i)=>{
+    const leg=legData[i]; // leg i goes from previous point to this stop
+    const legCost=(leg.min/60)*drRate + leg.mi*miRate;
+    return {
+      legMi:leg.mi, legMin:leg.min,
+      marginalCost:legCost + returnCostPerStop
+    };
+  });
+
+  // Totals from leg data (sum all legs including return)
+  const totalMi=legData.reduce((s,l)=>s+l.mi,0);
+  const totalMin=legData.reduce((s,l)=>s+l.min,0);
+  const totalDeliverCost=stopCosts.reduce((s,c)=>s+c.marginalCost,0);
   const totalShipEst=plannerStops.reduce((s,n)=>s+upsRate(estLbs(n.avgOrder||orderVal)),0);
   const totalOrderVal=plannerStops.reduce((s,n)=>s+(n.avgOrder||orderVal),0);
   const deliverViable=(totalDeliverCost/totalOrderVal)<viabPct;
@@ -899,23 +922,36 @@ async function runPlanner(){
   el.innerHTML=`
 <div class="planner-result">
   <div class="planner-result-title">${document.getElementById('pl-name').value||'Route'} — ${plannerStops.length} stops</div>
+  <div style="font-size:9px;color:var(--gray3);margin-bottom:8px">Per-stop cost = marginal cost of the leg to that stop + equal share of return trip · ${useOrs?'OpenRouteService routing':'Straight-line estimate'}</div>
   <div class="metric-grid">
     <div class="metric"><div class="metric-lbl">Total distance</div><div class="metric-val">${totalMi.toFixed(1)}</div><div class="metric-sub">miles round trip</div></div>
     <div class="metric"><div class="metric-lbl">Est. drive time</div><div class="metric-val">${totalMin}</div><div class="metric-sub">minutes</div></div>
     <div class="metric"><div class="metric-lbl">Total route cost</div><div class="metric-val" style="color:${deliverViable?'var(--green)':'var(--red)'}">$${totalDeliverCost.toFixed(2)}</div><div class="metric-sub">${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of orders</div></div>
-    <div class="metric"><div class="metric-lbl">Cost per stop</div><div class="metric-val">$${perStop.toFixed(2)}</div><div class="metric-sub">avg allocated</div></div>
+    <div class="metric"><div class="metric-lbl">Return leg (shared)</div><div class="metric-val">$${returnCostPerStop.toFixed(2)}</div><div class="metric-sub">per stop</div></div>
   </div>
   <div class="bk">
-    <div class="bk-row"><span>Driver cost (${totalMin} min)</span><span>$${driverCost.toFixed(2)}</span></div>
-    <div class="bk-row"><span>Mileage (${totalMi.toFixed(1)} mi × $${miRate})</span><span>$${mileCost.toFixed(2)}</span></div>
+    <div class="bk-row"><span>Total driver cost</span><span>$${((totalMin/60)*drRate).toFixed(2)}</span></div>
+    <div class="bk-row"><span>Total mileage cost (${totalMi.toFixed(1)} mi × $${miRate})</span><span>$${(totalMi*miRate).toFixed(2)}</span></div>
     <div class="bk-row tot"><span>Total deliver cost</span><span>$${totalDeliverCost.toFixed(2)}</span></div>
     <div class="bk-row tot"><span>Est. total ship cost</span><span>$${totalShipEst.toFixed(2)}</span></div>
     <div class="bk-row tot"><span>Deliver vs. ship delta</span><span style="color:${shipWins?'var(--red)':'var(--green)'}">${shipWins?'Ship saves':'Deliver saves'} $${Math.abs(totalDeliverCost-totalShipEst).toFixed(2)}</span></div>
   </div>
-  <div class="insight">${deliverViable&&!shipWins?`This route is financially viable at ${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of order revenue. Delivery saves $${(totalShipEst-totalDeliverCost).toFixed(2)} vs. shipping all orders.`:shipWins?`Shipping all orders individually would be $${(totalDeliverCost-totalShipEst).toFixed(2)} cheaper. Consider whether the relationship value of showing up in person justifies the difference.`:`Route delivery cost (${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of orders) exceeds the ${(viabPct*100).toFixed(0)}% viability threshold. Consider adding higher-value stops or reducing the route distance.`}</div>
-  <div style="font-size:10px;color:var(--gray4);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Per-stop breakdown</div>
-  ${plannerStops.map(n=>{const sc=upsRate(estLbs(n.avgOrder||orderVal));return`<div class="svd-row"><div class="svd-label">${n.name}</div><div style="font-size:10px">Del: $${perStop.toFixed(2)} · Ship: $${sc.toFixed(2)} · <b style="color:${perStop<sc?'var(--green)':'var(--red)'}">${perStop<sc?'Del wins':'Ship wins'}</b></div></div>`;}).join('')}
-  <div style="margin-top:6px;font-size:10px;color:var(--gray3)">${orsResult?'Route calculated via OpenRouteService':'Route estimated from straight-line distances — actual may vary'}</div>
+  <div class="insight">${deliverViable&&!shipWins?`Viable at ${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of order revenue. Delivery saves $${(totalShipEst-totalDeliverCost).toFixed(2)} vs. shipping all orders.`:shipWins?`Shipping individually would save $${(totalDeliverCost-totalShipEst).toFixed(2)}. Delivery may still be worth it for relationship value.`:`Cost ${(totalDeliverCost/totalOrderVal*100).toFixed(1)}% of orders exceeds ${(viabPct*100).toFixed(0)}% threshold.`}</div>
+  <div style="font-size:10px;color:var(--gray4);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Per-stop marginal cost</div>
+  ${plannerStops.map((n,i)=>{
+    const sc=upsRate(estLbs(n.avgOrder||orderVal));
+    const dc=stopCosts[i].marginalCost;
+    const win=dc<sc;
+    return`<div class="svd-row" style="padding:5px 0">
+      <div>
+        <div class="svd-label">${i+1}. ${n.name}</div>
+        <div style="font-size:9px;color:var(--gray3)">${stopCosts[i].legMi.toFixed(1)} mi · ${stopCosts[i].legMin} min leg + $${returnCostPerStop.toFixed(2)} return share</div>
+      </div>
+      <div style="text-align:right;font-size:11px;white-space:nowrap">
+        <span class="${win?'svd-win':'svd-lose'}">Del $${dc.toFixed(2)}</span> · Ship $${sc.toFixed(2)} · <b class="${win?'svd-win':'svd-lose'}">${win?'✓ Del':'Ship'}</b>
+      </div>
+    </div>`;
+  }).join('')}
 </div>`;
 }
 
@@ -1450,7 +1486,35 @@ function renderRouteList(){
   const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
   const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
   ROUTES.forEach(r=>{
-    const cost=calcRouteCost(r);const perStop=r.stops.length>0?cost.total/r.stops.length:0;
+    const cost=calcRouteCost(r);
+  // Calculate marginal leg costs using node coordinates where available
+  const logStopCosts=(()=>{
+    if(!r.miles||!r.stops.length) return r.stops.map(()=>null);
+    const pts=[ROASTERY,...r.stops.map(s=>NODES.find(n=>n.name.toLowerCase()===s.name.toLowerCase())||null)];
+    // Get leg distances
+    const legMi=[];
+    for(let i=0;i<pts.length-1;i++){
+      const a=pts[i],b=pts[i+1];
+      if(a&&b&&a.lat&&b.lat) legMi.push(haversine(a.lat,a.lng,b.lat,b.lng));
+      else legMi.push(null);
+    }
+    const totalLegMi=legMi.reduce((s,m)=>s+(m||0),0)||r.miles;
+    const scale=r.miles/totalLegMi; // scale legs to match actual odometer
+    const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
+    const miRate=parseFloat(document.getElementById('mile-rate').value)||0.70;
+    // Return leg = last leg (stopN → roastery)
+    const returnLegMi=(legMi[legMi.length-1]||0)*scale;
+    const returnLegMin=Math.round((returnLegMi/28)*60);
+    const returnCost=returnLegMi*miRate+(returnLegMin/60)*drRate;
+    const returnPerStop=returnCost/r.stops.length;
+    return r.stops.map((_,i)=>{
+      const lMi=(legMi[i]||0)*scale;
+      const lMin=Math.round((lMi/28)*60);
+      const marginal=lMi*miRate+(lMin/60)*drRate+returnPerStop;
+      return{mi:lMi.toFixed(1),min:lMin,cost:marginal};
+    });
+  })();
+  const perStop=r.stops.length>0?cost.total/r.stops.length:0;
     const anchor=r.anchorId?NODES.find(n=>n.id===r.anchorId):null;
     const hasActual=r.stops.some(s=>s.actualUps!==null);const isOpen=selectedRouteId===r.id;
     const fromPlan=r.fromPlanner;
@@ -1491,7 +1555,11 @@ function renderRouteList(){
       </div>
       <div style="margin-bottom:4px"><input id="so-${r.id}-${i}" type="text" value="${s.order}" placeholder="Order number" style="font-size:11px" onblur="saveStopEdit('${r.id}',${i})"/></div>
       <div class="stop-costs">
-        <div class="stop-cost-cell"><div class="stop-cost-lbl">Deliver/stop</div><div class="stop-cost-val">${r.miles?'$'+perStop.toFixed(2):'—'}</div></div>
+        <div class="stop-cost-cell">
+          <div class="stop-cost-lbl">Marginal cost</div>
+          <div class="stop-cost-val">${r.miles&&logStopCosts[i]?'$'+logStopCosts[i].cost.toFixed(2):'—'}</div>
+          ${r.miles&&logStopCosts[i]?`<div style="font-size:9px;color:var(--gray3);margin-top:1px">${logStopCosts[i].mi} mi · ${logStopCosts[i].min} min</div>`:''}
+        </div>
         <div class="stop-cost-cell"><div class="stop-cost-lbl">Standalone Café</div><div class="stop-cost-val est">~$${cafeCost.toFixed(2)}</div></div>
         <div class="stop-cost-cell"><div class="stop-cost-lbl">UPS ${s.actualUps!==null?'(actual)':'(est)'}</div><div class="stop-cost-val ${s.actualUps!==null?'actual':'est'}">$${s.actualUps!==null?s.actualUps.toFixed(2):estUps.toFixed(2)}</div></div>
       </div>
