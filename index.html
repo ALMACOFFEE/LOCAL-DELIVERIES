@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -391,12 +391,138 @@ textarea{resize:vertical;min-height:52px}
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+/*
+================================================================================
+  ALMA COFFEE — LOCAL DELIVERY ROUTE ANALYZER
+  Tool version: v4 | Built: August 2026
+================================================================================
+
+PURPOSE
+-------
+Internal tool for Alma Coffee (Copan Coffee Roasters LLC) to manage, evaluate,
+and log local wholesale delivery routes. Helps the team decide whether to
+deliver or ship each customer order, plan viable routes, and track actual
+delivery costs vs. UPS shipping costs over time.
+
+LIVE URL
+--------
+  https://localdeliveries.netlify.app
+
+TECH STACK
+----------
+  - Frontend:   Single HTML file (no build process, no dependencies to install)
+  - Map:        Leaflet.js + OpenStreetMap tiles (free, no API key required)
+  - Routing:    OpenRouteService API (free tier, real driving routes)
+  - Database:   Supabase (PostgreSQL) — data persists across all devices/users
+  - Hosting:    Netlify (auto-deploys from GitHub on every commit)
+  - Source:     github.com/ALMACOFFEE/LOCAL-DELIVERIES (index.html)
+
+SUPABASE DATABASE
+-----------------
+  Project:  Alma Local Deliveries
+  URL:      https://dclvscfotnhhknhbgzhm.supabase.co
+  Tables:   nodes, companies, zones, named_routes, routes
+  Access:   Anon key (read/write, no login required — internal use only)
+
+  To view or edit data directly: app.supabase.com → Alma Local Deliveries
+  → Table Editor. All changes made in the tool also appear here in real time.
+
+  IMPORTANT: The Supabase free tier pauses after 1 week of inactivity.
+  If the tool stops loading data, go to supabase.com, log in, and click
+  "Restore" on the project. It resumes in ~30 seconds.
+
+HOW DATA FLOWS
+--------------
+  1. On page load: loadFromSupabase() fetches all 5 tables in parallel.
+     If tables are empty (first ever load), default seed data is written.
+  2. Every change (add node, edit company, log route, etc.) calls saveState()
+     which upserts all affected records to Supabase immediately.
+  3. Deletes call deleteFromDb() which removes the specific row by ID.
+  4. All users sharing the URL see the same live data.
+
+HOW TO UPDATE THE TOOL
+----------------------
+  1. Make changes to index.html in this chat or locally.
+  2. Commit the updated index.html to github.com/ALMACOFFEE/LOCAL-DELIVERIES.
+  3. Netlify auto-deploys within ~30 seconds. No other steps needed.
+
+  Note: The Supabase anon key is embedded in the JS (const SUPA_KEY).
+  If it ever needs to be rotated, update it on line ~447 and commit.
+
+RESETTING ALL DATA
+------------------
+  "Reset data" button (top-right header) clears the Supabase database and
+  reloads all default nodes, companies, and routes. Use with caution —
+  this affects everyone. Any manually added nodes, logged routes, or
+  actual UPS costs entered will be permanently lost.
+
+COST ASSUMPTIONS (editable in Analyze tab)
+-------------------------------------------
+  Driver cost:     $15.00 / hr
+  Cost per mile:   $0.70 / mi
+  Viability target: 8% of order value
+  UPS rates: estimated from package weight (not live UPS API).
+             Enter actual UPS costs in Route Log to improve accuracy.
+
+TABS & FEATURES
+---------------
+  Analyze:        Enter an address to see deliver vs. ship cost comparison.
+                  Shows standalone cost (from Alma Café) and add-on cost
+                  (marginal cost from nearest existing node). Uses
+                  OpenRouteService for real drive time.
+
+  Route Planner:  Build a hypothetical route, calculate total cost + time
+                  via ORS multi-stop routing, see per-stop marginal costs,
+                  and compare against shipping. "Convert to Route Log" creates
+                  a pre-filled log entry.
+
+  Nodes:          View, edit, and delete all delivery locations. Each node
+                  stores: name, address, lat/lng, revenue, avg order, orders/mo,
+                  type (regular/anchor/multi-loc), and links to company/zone/route.
+
+  Companies:      Multi-location account groupings. A company's color overrides
+                  the default node pin color on the map for all linked nodes.
+                  Used to evaluate account LTV across multiple locations.
+
+  Zones & Routes: Create named delivery zones (geographic areas) and named
+                  routes (day-based runs). Each named route shows viability
+                  metrics and can be toggled on/off on the map with its own
+                  color. "Open in Planner" loads all stops into Route Planner.
+
+  Add Node:       Add a new delivery location. Address is geocoded via
+                  Nominatim (OpenStreetMap). Node immediately appears on
+                  map and is saved to Supabase.
+
+  Route Log:      Record actual past deliveries with date, driver, departure/
+                  return time, odometer mileage, and per-stop order numbers.
+                  Enter actual UPS costs per stop after looking up the rate —
+                  these build historical accuracy for the deliver vs. ship
+                  comparison over time. Per-stop cost uses marginal leg
+                  distance (not a flat equal split).
+
+KEY PEOPLE
+----------
+  Chaz Day       — Business Development Manager, tool owner
+  Lexi Abernathy — Sales Manager (roasted coffee)
+  Leticia Hutchins — COO
+  Harry Hutchins — Co-owner
+
+CONTACT FOR TOOL QUESTIONS
+---------------------------
+  Chaz Day | chaz@hommework.co
+================================================================================
+*/
 const ROASTERY={name:"Alma Roastery / Café",address:"3448 Holly Springs Pkwy, Canton, GA 30115",lat:34.23607,lng:-84.49079};
 const ORS_KEY="5b3ce3597851110001cf6248a5e1ccba58e44e2e84ecb3dc5f8c9c7e";
 const COLORS=['#E53935','#8E24AA','#1E88E5','#00ACC1','#43A047','#FB8C00','#F4511E','#6D4C41','#546E7A','#F06292','#7CB342','#FFB300'];
 const COLOR_NAMES=['Red','Purple','Blue','Teal','Green','Orange','Deep Orange','Brown','Steel Blue','Pink','Lime','Amber'];
 
 // ── Default seed data (only used when localStorage is empty) ──────────────
+// ── DEFAULT SEED DATA ───────────────────────────────────────────────────────
+// Used only when Supabase tables are empty (first load ever).
+// After first load, all data lives in Supabase — edit nodes in the Nodes tab,
+// not here. Changes here only take effect after a full Reset.
+// Coordinates are hardcoded from geocoding; approximate for some locations.
 const DEFAULT_NODES=[
   {id:1,name:"Stout Brothers",address:"240 Chambers St, Woodstock, GA 30188",lat:34.09972,lng:-84.52081,revenue:10786,avgOrder:449,ordersPerMo:4.0,type:"anchor",companyId:4,zoneId:null,routeId:null},
   {id:2,name:"Pie Bar",address:"8720 Main St #130, Woodstock, GA 30188",lat:34.10155,lng:-84.51671,revenue:4722,avgOrder:225,ordersPerMo:3.0,type:"regular",companyId:5,zoneId:null,routeId:null},
@@ -443,6 +569,9 @@ const DEFAULT_ROUTES=[
 ];
 
 // ── Supabase backend ──────────────────────────────────────────────────────
+// ── SUPABASE CONNECTION ─────────────────────────────────────────────────────
+// Project: Alma Local Deliveries | supabase.com → ALMACOFFEE account
+// Free tier: 500MB storage, unlimited requests. Pauses after 7 days inactivity.
 const SUPA_URL = 'https://dclvscfotnhhknhbgzhm.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRjbHZzY2ZvdG5oaGtuaGJnemhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NDM4NzIsImV4cCI6MjEwMTUxOTg3Mn0.DMfpDUdRWUnddTp7KWLcSyJoeLymVVNTRd2zCbZbTVE';
 
@@ -474,6 +603,9 @@ async function sbDelete(table,id){
   }catch(e){console.warn('delete failed',table,e);}
 }
 
+// ── DATA CONVERTERS: JS object ↔ Supabase snake_case columns ────────────────
+// JS uses camelCase (avgOrder), Supabase uses snake_case (avg_order).
+// node_ids stored as JSON string in Supabase, parsed back on read.
 function nodeToRow(n){return{id:n.id,name:n.name,address:n.address,lat:n.lat,lng:n.lng,revenue:n.revenue||null,avg_order:n.avgOrder||null,orders_per_mo:n.ordersPerMo||null,type:n.type||'regular',company_id:n.companyId||null,zone_id:n.zoneId||null,route_id:n.routeId||null,node_ids:n.nodeIds?JSON.stringify(n.nodeIds):null};}
 function rowToNode(r){return{id:r.id,name:r.name,address:r.address,lat:r.lat,lng:r.lng,revenue:r.revenue,avgOrder:r.avg_order,ordersPerMo:r.orders_per_mo,type:r.type||'regular',companyId:r.company_id,zoneId:r.zone_id,routeId:r.route_id,nodeIds:r.node_ids?(typeof r.node_ids==='string'?JSON.parse(r.node_ids):r.node_ids):null};}
 function companyToRow(c){return{id:c.id,name:c.name,notes:c.notes||null,color:c.color||null};}
@@ -485,6 +617,9 @@ function rowToNr(r){return{id:r.id,name:r.name,day:r.day,zoneId:r.zone_id,color:
 function routeToRow(rt){return{id:rt.id,date:rt.date||null,driver:rt.driver||null,dep:rt.dep||null,ret:rt.ret||null,miles:rt.miles||null,anchor_id:rt.anchorId||null,stops:JSON.stringify(rt.stops||[]),notes:rt.notes||null,from_planner:rt.fromPlanner||false};}
 function rowToRoute(r){return{id:r.id,date:r.date,driver:r.driver||'',dep:r.dep||'09:00',ret:r.ret||'12:00',miles:r.miles||0,anchorId:r.anchor_id,stops:typeof r.stops==='string'?JSON.parse(r.stops):r.stops||[],notes:r.notes||'',fromPlanner:r.from_planner||false};}
 
+// ── SAVE STATE ──────────────────────────────────────────────────────────────
+// Called after every data mutation. Upserts all current state to Supabase.
+// Uses 'resolution=merge-duplicates' so existing rows are updated, not duplicated.
 async function saveState(){
   try{
     await Promise.all([
@@ -509,6 +644,8 @@ function showLoading(msg){
 }
 function hideLoading(){const el=document.getElementById('loading-overlay');if(el)el.style.display='none';}
 
+// ── RESET ALL DATA ──────────────────────────────────────────────────────────
+// Clears Supabase database and reloads defaults. Affects ALL users. Irreversible.
 function resetAllData(){
   if(!confirm('Reset all data? This will clear the shared database and reload defaults. Cannot be undone.'))return;
   NODES=DEFAULT_NODES;COMPANIES=DEFAULT_COMPANIES;
@@ -563,6 +700,10 @@ const DEFAULT_NAMED_ROUTES=[
 let NODES=[], COMPANIES=[], ZONES=[], NAMED_ROUTES=[], ROUTES=[];
 let nextId=37, nextCoId=35, nextZoneId=1, nextNrId=5;
 
+// ── LOAD FROM SUPABASE ──────────────────────────────────────────────────────
+// Called once on page load. Fetches all 5 tables in parallel.
+// If nodes table is empty (first ever load), seeds defaults and saves them.
+// Falls back to hardcoded defaults if Supabase is unreachable.
 async function loadFromSupabase(){
   showLoading('Loading Alma Coffee delivery data…');
   try{
@@ -665,16 +806,28 @@ function selectZoneColor(el,color){
 }
 // buildColorPicker called in initApp()
 
+// ── DISTANCE & COST UTILITIES ────────────────────────────────────────────────
+// haversine: straight-line distance in miles between two lat/lng points.
+// Used for marginal cost estimates when ORS routing is unavailable.
 function haversine(a,b,c,d){
   const R=3958.8,dL=(c-a)*Math.PI/180,dG=(d-b)*Math.PI/180;
   const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dG/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
+// upsRate: estimates UPS Ground GA-to-GA (zone 2, 1-day) cost by package weight.
+// These are approximations based on 2026 published rates — not live UPS API.
+// Enter actual UPS costs in Route Log to replace estimates with real data.
 function upsRate(lbs){if(lbs<=2)return 9.50;if(lbs<=5)return 11.25;if(lbs<=10)return 13.50;if(lbs<=15)return 15.75;if(lbs<=20)return 18.00;if(lbs<=25)return 20.50;if(lbs<=30)return 22.75;if(lbs<=40)return 26.50;if(lbs<=50)return 30.25;if(lbs<=60)return 34.00;if(lbs<=70)return 38.50;if(lbs<=80)return 43.00;return 43+(lbs-80)*0.55;}
 function estLbs(v){if(v>=400)return Math.min(80,Math.round(v/55)*5.75+1.0);return Math.max(3,Math.round(v/8)*0.75+0.75);}
+// ── OPENROUTESERVICE ROUTING ────────────────────────────────────────────────
+// Free tier: 500 requests/day, 40/minute. No API key management needed.
+// getOrs: single leg (point A → point B). Returns distMi and durationMin.
+// Falls back to haversine estimate if ORS is unavailable or rate-limited.
 async function getOrs(fromLat,fromLng,toLat,toLng){
   try{const url=`https://api.openrouteservice.org/v2/directions/driving-car?api_key=${ORS_KEY}&start=${fromLng},${fromLat}&end=${toLng},${toLat}`;const r=await fetch(url);if(!r.ok)return null;const d=await r.json();const seg=d.features?.[0]?.properties?.segments?.[0];if(!seg)return null;return{distMi:seg.distance/1609.34,durationMin:Math.round(seg.duration/60)};}catch(e){return null;}
 }
+// getOrsMulti: full multi-stop route via POST to ORS directions endpoint.
+// Returns total distMi and durationMin for the entire route.
 async function getOrsMulti(coords){
   // coords = [[lng,lat], ...] for ORS
   try{
@@ -703,6 +856,11 @@ function switchTab(t){
 function selType(t){newType=t;['regular','anchor','multi'].forEach(x=>document.getElementById('chip-'+x).classList.toggle('on',x===t));}
 
 // ── ANALYZE ────────────────────────────────────────────────────────────────
+// ── ANALYZE TAB ─────────────────────────────────────────────────────────────
+// Geocodes the entered address via Nominatim (OpenStreetMap, free).
+// Calculates: standalone cost (Café → address → Café) and add-on cost
+// (nearest node → address → nearest node). Calls ORS for real drive time.
+// Verdict: lowest cost option wins. Shows min order thresholds for each origin.
 async function analyzeAddress(){
   const addrStreet=document.getElementById('addr-input').value.trim();
   const addrSuite=document.getElementById('addr-suite').value.trim();
@@ -866,6 +1024,11 @@ function drawPlannerOnMap(){
   if(pts.length>2)map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});
 }
 
+// ── ROUTE PLANNER ───────────────────────────────────────────────────────────
+// Calls ORS for each individual leg in parallel (roastery→s1, s1→s2, etc.).
+// Per-stop marginal cost = leg cost (time + miles to reach that stop) +
+// equal share of the return trip. This means stop order matters —
+// the same stop costs differently depending on what comes before it.
 async function runPlanner(){
   if(plannerStops.length<1){alert('Add at least one stop.');return;}
   const drRate=parseFloat(document.getElementById('driver-rate').value)||15;
@@ -970,6 +1133,7 @@ function convertPlannerToLog(){
 }
 
 // ── NODE MANAGEMENT ────────────────────────────────────────────────────────
+// ── NODES TAB ───────────────────────────────────────────────────────────────
 function renderNodeList(){
   document.getElementById('node-count').textContent=`(${NODES.length})`;
   const el=document.getElementById('node-list');el.innerHTML='';
@@ -1069,6 +1233,10 @@ function updateCompanyColor(coId,color){
   const co=COMPANIES.find(c=>c.id===coId);if(co){co.color=color;}
   refreshAllMarkers();renderCompanyList();saveState();
 }
+// ── COMPANIES TAB ───────────────────────────────────────────────────────────
+// Companies group multiple node locations under one account (e.g. Metzcorp).
+// A company's color overrides the node type color for all linked nodes on the map.
+// Company LTV = sum of revenue across all linked node locations.
 function renderCompanyList(){
   const el=document.getElementById('company-list');el.innerHTML='';
   if(!COMPANIES.length){el.innerHTML='<div class="status-msg" style="padding:10px">No companies yet.</div>';return;}
@@ -1234,6 +1402,10 @@ function routeViability(rt){
   return{totalMi,estMinutes,totalCost,perStop,totalOrderVal,totalShipEst,costPct,viable,shipWins,nodeCount:nodes.length};
 }
 
+// ── ZONES & ROUTES TAB ──────────────────────────────────────────────────────
+// Named routes use nodeIds array (not routeId on node) for stop membership.
+// Viability: estimated from haversine distances scaled to match actual odometer.
+// Toggle visibility: each route has its own Leaflet layer group (routeLayers dict).
 function renderNamedRouteList(){
   const el=document.getElementById('named-route-list');el.innerHTML='';
   if(!NAMED_ROUTES.length){el.innerHTML='<div class="status-msg" style="padding:8px">No named routes yet.</div>';return;}
@@ -1313,6 +1485,10 @@ function loadRouteIntoPlanner(rtId){
 }
 
 // ── ADD NODE ───────────────────────────────────────────────────────────────
+// ── ADD NODE TAB ────────────────────────────────────────────────────────────
+// Three-attempt geocoding: (1) Nominatim structured search with separate
+// street/city/state/zip fields, (2) free-form fallback, (3) city-only fallback.
+// Node is immediately placed on map and saved to Supabase.
 async function addNode(){
   const nm=document.getElementById('new-name').value.trim();
   const street=document.getElementById('new-addr').value.trim();
@@ -1434,6 +1610,10 @@ function renderStopEntries(){
 }
 
 // ── ROUTE LOG ──────────────────────────────────────────────────────────────
+// ── ROUTE LOG TAB ───────────────────────────────────────────────────────────
+// Logs an actual past delivery run. Stops can be existing nodes (by company
+// lookup) or manually entered new locations. Actual UPS costs entered per
+// stop after the fact — these replace estimates in the Ship vs. Deliver summary.
 function logRoute(){
   const date=document.getElementById('rl-date').value;
   const dep=document.getElementById('rl-dep').value;
@@ -1588,6 +1768,10 @@ function toggleRouteMapLog(id){
   routeMapLayer.addTo(map);
   if(pts.length>2)map.fitBounds(L.latLngBounds(pts),{padding:[30,30]});
 }
+// ── SHIP VS. DELIVER SUMMARY ────────────────────────────────────────────────
+// Aggregates all logged routes. For each stop: uses actual UPS cost if entered,
+// otherwise falls back to upsRate() estimate. Clearly labels which is which.
+// Per-stop deliver cost uses marginal leg distance, not equal split.
 function renderSvdSummary(){
   const el=document.getElementById('svd-summary');
   if(!ROUTES.length){el.innerHTML='<div class="status-msg" style="padding:10px">Log routes to build historical comparisons.</div>';return;}
@@ -1627,6 +1811,9 @@ function renderSvdSummary(){
 }
 
 // ── App initialisation (called after Supabase loads) ──────────────────────
+// ── APP INITIALIZATION ──────────────────────────────────────────────────────
+// Called by loadFromSupabase() after data is ready. Places all node markers,
+// populates dropdowns, builds color pickers, and renders all tab content.
 function initApp(){
   NODES.forEach(placeMarker);
   populateDropdowns();
