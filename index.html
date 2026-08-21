@@ -250,9 +250,10 @@ textarea{resize:vertical;min-height:52px}
       </div>
       <button class="btn btn-gold" onclick="runPlanner()" style="margin:12px 14px 4px">Calculate route</button>
       <div id="planner-result"></div>
-      <div style="padding:0 14px 12px">
+      <div style="padding:0 14px 12px;display:flex;flex-direction:column;gap:6px">
         <button class="btn btn-success" onclick="convertPlannerToLog()">Convert to Route Log</button>
-        <div class="hint" style="margin-top:4px">Creates a pre-filled log entry — actual date, driver, and mileage filled in on delivery day</div>
+        <button class="btn btn-gold" onclick="openPushToDriverSheet()" id="push-driver-btn" style="display:none">📱 Push to Driver App</button>
+        <div class="hint" style="margin-top:2px">Push sends all stops to the driver app for a specific delivery date.</div>
       </div>
     </div>
 
@@ -1635,7 +1636,7 @@ function logRoute(){
   });
   ROUTES.unshift({id:'r'+Date.now(),date,driver,dep,ret,miles,anchorId:anchorVal?parseInt(anchorVal):null,stops,notes:document.getElementById('rl-notes').value.trim()});
   stopEntries=[];renderStopEntries();
-  document.getElementById('rl-date').value='';document.getElementById('rl-driver').value='';document.getElementById('rl-notes').value='';
+  document.getElementById('rl-date').value=new Date().toISOString().slice(0,10);document.getElementById('rl-driver').value='';document.getElementById('rl-notes').value='';
   document.getElementById('rl-status').textContent=`Route for ${date} saved.`;
   renderRouteList();renderSvdSummary();saveState();
 }
@@ -1826,10 +1827,116 @@ function initApp(){
   renderNamedRouteList();
   renderRouteList();
   renderSvdSummary();
+  // Default route log date to today so driver never has to scroll from year 0
+  const todayStr = new Date().toISOString().slice(0,10);
+  const rlDate = document.getElementById('rl-date');
+  if(rlDate) rlDate.value = todayStr;
 }
 
-// Kick off — load from Supabase, then initApp()
+// ── PUSH TO DRIVER ───────────────────────────────────────────────────────
+// Opens the push modal, pre-fills today's date and shows stop preview
+function openPushToDriverSheet(){
+  if(!plannerStops.length){alert('Add stops to the planner first.');return;}
+  // Default to today
+  const todayStr = new Date().toISOString().slice(0,10);
+  document.getElementById('push-date').value = todayStr;
+  document.getElementById('push-driver-name').value = '';
+  document.getElementById('push-status').textContent = '';
+  document.getElementById('push-confirm-btn').disabled = false;
+  document.getElementById('push-confirm-btn').textContent = 'Push Route';
+  // Show stop preview
+  const preview = document.getElementById('push-stop-preview');
+  preview.innerHTML = plannerStops.map((n,i) =>
+    `<div style="padding:3px 0;border-bottom:1px solid var(--gray2);display:flex;align-items:center;gap:6px">
+      <span style="width:18px;height:18px;border-radius:50%;background:var(--navy);color:#fff;font-size:10px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</span>
+      <span style="flex:1">${n.name}</span>
+    </div>`
+  ).join('') + `<div style="padding-top:6px;color:var(--gray3);font-size:10px">${plannerStops.length} stop${plannerStops.length!==1?'s':''}</div>`;
+  document.getElementById('push-driver-overlay').style.display = 'flex';
+}
+
+function closePushToDriverSheet(){
+  document.getElementById('push-driver-overlay').style.display = 'none';
+}
+
+async function executePushToDriver(){
+  const date = document.getElementById('push-date').value;
+  const driverName = document.getElementById('push-driver-name').value.trim();
+  if(!date){alert('Please select a delivery date.');return;}
+  const btn = document.getElementById('push-confirm-btn');
+  const status = document.getElementById('push-status');
+  btn.disabled = true;
+  btn.textContent = 'Pushing…';
+  status.textContent = '';
+  status.style.color = 'var(--green)';
+  try{
+    // Write each stop to driver_routes table
+    const pushes = plannerStops.map((n, i) =>
+      sbUpsert('driver_routes', {
+        id: `dr-${date}-${n.id||i}-${Date.now()}-${i}`,
+        date,
+        stop_order: i + 1,
+        stop_name: n.name,
+        stop_address: n.address,
+        order_num: '',
+        instructions: n.instructions || '',
+        stop_note: '',
+        status: 'pending',
+        lat: n.lat || null,
+        lng: n.lng || null,
+        driver: driverName || null,
+      })
+    );
+    await Promise.all(pushes);
+    status.textContent = `✓ ${plannerStops.length} stop${plannerStops.length!==1?'s':''} pushed to driver app for ${date}`;
+    btn.textContent = '✓ Pushed!';
+    btn.style.background = 'var(--green)';
+    // Auto-close after 2 seconds
+    setTimeout(() => closePushToDriverSheet(), 2000);
+  } catch(e){
+    status.textContent = 'Push failed — check your connection.';
+    status.style.color = 'var(--red)';
+    btn.disabled = false;
+    btn.textContent = 'Push Route';
+    console.error('Push to driver failed:', e);
+  }
+}
+
+// Show push button after route is calculated
+const _origRunPlanner = runPlanner;
+runPlanner = async function(){
+  await _origRunPlanner();
+  // Show Push to Driver button once result is visible
+  const resultEl = document.getElementById('planner-result');
+  if(resultEl && resultEl.innerHTML){
+    document.getElementById('push-driver-btn').style.display = 'block';
+  }
+};
+
+// ── Kick off — load from Supabase, then initApp()
 loadFromSupabase();
 </script>
+<!-- ── PUSH TO DRIVER MODAL ─────────────────────────────────────────── -->
+<div id="push-driver-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:24px;width:300px;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <div style="font-size:16px;font-weight:700;color:var(--navy);margin-bottom:4px">📱 Push to Driver App</div>
+    <div style="font-size:12px;color:var(--gray4);margin-bottom:16px">All stops will appear in the driver app for the selected date.</div>
+    <div class="fl" style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:500;color:var(--gray4)">Delivery date *</label>
+      <input type="date" id="push-date" style="width:100%;padding:8px 10px;border:1px solid var(--gray2);border-radius:8px;font-size:13px;font-family:inherit;outline:none"/>
+    </div>
+    <div class="fl" style="margin-bottom:16px">
+      <label style="font-size:11px;font-weight:500;color:var(--gray4)">Driver name (optional)</label>
+      <input type="text" id="push-driver-name" placeholder="e.g. Hayden" style="width:100%;padding:8px 10px;border:1px solid var(--gray2);border-radius:8px;font-size:13px;font-family:inherit;outline:none"/>
+    </div>
+    <div id="push-stop-preview" style="background:var(--gray0);border-radius:8px;padding:10px;margin-bottom:16px;max-height:150px;overflow-y:auto;font-size:12px;color:var(--gray5)"></div>
+    <div id="push-status" style="font-size:11px;color:var(--green);margin-bottom:8px;min-height:16px;text-align:center"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="closePushToDriverSheet()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--gray2);background:#fff;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;color:var(--gray5)">Cancel</button>
+      <button onclick="executePushToDriver()" id="push-confirm-btn" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--navy);color:#fff;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Push Route</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
